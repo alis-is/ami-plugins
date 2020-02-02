@@ -5,7 +5,7 @@ local eenvLoaded, eenv = pcall(require, "eli.env.extra")
 local fs = require "eli.fs"
 local is_tty = require "is_tty".is_stdout_tty()
 
-require "eli.extensions.string"
+local _exString = require "eli.extensions.string"
 local _trace, _debug = require"eli.util".global_log_factory("plugin/apt", "trace", "debug")
 
 local function get_apt_binary()
@@ -105,7 +105,7 @@ local function install(dependencies, options)
     if type(dependencies) == 'table' then
         dependencies = values(dependencies)
     elseif type(dependencies) == 'string' then
-        dependencies = dependencies:split("%S+")
+        dependencies = _exString.split(dependencies)
     end
     
     for i, dependency in ipairs(dependencies) do
