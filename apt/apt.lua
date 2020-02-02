@@ -137,7 +137,7 @@ local function upgrade_non_interactive(options)
     local env = options.env or eenv.environment()
     env.DEBIAN_FRONTEND = 'noninteractive'
     options.env = env
-    return upgrade(dependencies, options)
+    return upgrade(options)
 end
 
 local function update(options)
