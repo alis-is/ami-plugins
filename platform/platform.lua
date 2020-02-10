@@ -1,4 +1,3 @@
-
 local _trace, _debug = require"eli.util".global_log_factory("plugin/platform", "trace", "debug")
 
 local function _execute(cmd) 
