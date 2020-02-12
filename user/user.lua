@@ -30,7 +30,11 @@ local function _whoami()
     local _whoami = io.popen("whoami")
     local _user = _whoami:read("l")
     local _res, _code = _whoami:close()
-    return _res, _user 
+    if _res then 
+        return _user 
+    else
+        return _res, _code 
+    end
 end
 
 return {
