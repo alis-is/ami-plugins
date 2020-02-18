@@ -69,7 +69,7 @@ local function _get_service_status(serviceName)
     return _status
 end
 
-return generate_safe_functions({
+return _eliUtil.generate_safe_functions({
     install_service = _install_service,
     start_service = _start_service,
     stop_service = _stop_service,
