@@ -1,17 +1,14 @@
 local _trace, _debug = require"eli.util".global_log_factory("plugin/systemctl", "trace", "debug")
-local _eprocLoaded, _eProc = pcall(require, "eli.proc.extra")
-local _eliUtil = require "eli.util"
-local _eliFs = require"eli.fs"
 
 assert(os.execute('systemctl --version 2>&1 >/dev/null'), "systemctl not found")
-assert(_eprocLoaded, "systemctl plugin requires posix proc extra api (eli.proc.extra)")
+assert(eliProc.EPROC, "systemctl plugin requires posix proc extra api (eli.proc.extra)")
 
 local _exec_systemctl = function(...)
     local _cmd = exString.join_strings(" ", ...)
     local _rd, _proc_wr = eliFs.pipe()
     local _rderr, _proc_werr = eliFs.pipe()
 
-    log_trace("Executing systemctl " .. _cmd)
+    _trace("Executing systemctl " .. _cmd)
     local _proc, _err = eliProc.spawn {"systemctl", args = { ... }, stdout = _proc_wr, stderr = _proc_werr}
     _proc_wr:close()
     _proc_werr:close()
@@ -22,7 +19,7 @@ local _exec_systemctl = function(...)
         error("Failed to execute systemctl command: " .. _cmd)
     end
     local _exitcode = _proc:wait() 
-    log_trace("systemctl exit code: " .. _exitcode)
+    _trace("systemctl exit code: " .. _exitcode)
     local _stderr = _rderr:read("a")
     local _stdout = _rd:read("a")
     assert(_exitcode == 0, "Failed to execute systemctl command: " .. _cmd)
@@ -30,7 +27,7 @@ local _exec_systemctl = function(...)
 end
 
 local function _install_service(sourceFile, serviceName)
-    local _ok, _error = _eliFs.safe_copy_file(sourceFile, "/etc/systemd/system/" .. serviceName .. ".service")
+    local _ok, _error = eliFs.safe_copy_file(sourceFile, "/etc/systemd/system/" .. serviceName .. ".service")
     assert(_ok, "Failed to install " .. serviceName .. ".service - " .. (_error or ""))
     _exec_systemctl("daemon-reload")
     _exec_systemctl("enable", serviceName .. ".service")
@@ -54,7 +51,7 @@ local function _remove_service(serviceName)
     _trace("Removing service: " .. serviceName)
     _stop_service(serviceName)
     _trace("Service " .. serviceName .. "stopped...")
-    local _ok, _error = _eliFs.safe_remove("/etc/systemd/system/" .. serviceName .. ".service")
+    local _ok, _error = eliFs.safe_remove("/etc/systemd/system/" .. serviceName .. ".service")
     assert(_ok, "Failed to remove " .. serviceName .. ".service - " .. (_error or ""))
     _exec_systemctl("daemon-reload")
     _trace("Service " .. serviceName .. "removed...")
@@ -69,7 +66,7 @@ local function _get_service_status(serviceName)
     return _status
 end
 
-return _eliUtil.generate_safe_functions({
+return eliUtil.generate_safe_functions({
     install_service = _install_service,
     start_service = _start_service,
     stop_service = _stop_service,
