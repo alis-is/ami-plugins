@@ -70,5 +70,6 @@ return eliUtil.generate_safe_functions({
     install_service = _install_service,
     start_service = _start_service,
     stop_service = _stop_service,
+    remove_service = _remove_service,
     get_service_status = _get_service_status
 })
