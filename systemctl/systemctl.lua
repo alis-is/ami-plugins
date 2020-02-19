@@ -52,7 +52,9 @@ local function _remove_service(serviceName)
     _stop_service(serviceName)
     _trace("Service " .. serviceName .. "stopped...")
     local _ok, _error = eliFs.safe_remove("/etc/systemd/system/" .. serviceName .. ".service")
-    assert(_ok, "Failed to remove " .. serviceName .. ".service - " .. (_error or ""))
+    if not _ok then 
+        error("Failed to remove " .. serviceName .. ".service - " .. (_error or ""))
+    end
     _exec_systemctl("daemon-reload")
     _trace("Service " .. serviceName .. "removed...")
 end
