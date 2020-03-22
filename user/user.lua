@@ -37,8 +37,16 @@ local function _whoami()
     end
 end
 
+local function _is_root() 
+    local _root = os.execute('sh -c \'[ "$(id -u)" -eq "0" ] && exit 0 || exit 1\'')
+    local _admin = os.execute('cmd.exe /C "NET SESSION >nul 2>&1 && EXIT /B 0 || EXIT /B 1"')
+    return _root or _admin
+end
+
 return {
     execute_cmd_as = _execute_cmd_as,
     add_user = _add_user,
-    whoami = _whoami
+    whoami = _whoami,
+    is_admin = _is_root,
+    is_root = _is_root
 }
