@@ -29,7 +29,7 @@ local function _get_platform()
         end
     else 
         -- unix
-        _debug{ msg="Assuming windows platform." }
+        _debug{ msg="Assuming unix platform." }
         local _success, _exit, _code, _output = _execute('lsb_release -a 2>/dev/null')
         _trace{ msg=_output, type="stdout", external_source="lsb_release -a", exitcode=_exit }
         if not _success then 
