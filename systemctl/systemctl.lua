@@ -64,8 +64,10 @@ local function _get_service_status(serviceName)
     local _exitcode, _stdout = _exec_systemctl("show", "-p", "SubState", "--value", serviceName)
     assert(_exitcode == 0, "Failed to get service status")
     local _status = _stdout:match("%s*(%S*)")
+    local _exitcode, _stdout = _exec_systemctl("show", "-p", "SubState", "--value", serviceName)
+    local _started = type(_stdout) == "string" and _stdout:match("%s*=(.*)")
     _trace("Got service " .. serviceName .. " status - " .. (_status or ""))
-    return _status
+    return _status, _started
 end
 
 return eliUtil.generate_safe_functions({
