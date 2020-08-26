@@ -51,14 +51,14 @@ local function _execute(cmd, args, options)
     if type(options) ~= "table" then
         options = {}
     end
-    _trace {msg = "Spawning " .. APT, args = args, env = options.env, cmd = cmd}
+    _trace {msg = "Spawning " .. cmd, args = args, env = options.env, cmd = cmd}
 
-    local proc, err = eproc.spawn {stdout = proc_wr, stderr = proc_werr, command = APT, args = args, env = options.env}
+    local proc, err = eproc.spawn {stdout = proc_wr, stderr = proc_werr, command = cmd, args = args, env = options.env}
     proc_wr:close()
     proc_werr:close()
 
     if not proc then
-        _debug {msg = "Failed to start " .. APT, error = err}
+        _debug {msg = "Failed to start " .. cmd, error = err}
         return false, -1, err, err
     end
 
@@ -99,12 +99,12 @@ local function _execute(cmd, args, options)
         stderr = stderr .. rderr:read("a")
     end
     local exitCode = proc:exitcode()
-    _trace {msg = APT .. " exited", exitcode = exitCode, stdout = stdout, stderr = stderr}
+    _trace {msg = cmd .. " exited", exitcode = exitCode, stdout = stdout, stderr = stderr}
     return exitCode == 0, exitCode, stdout, stderr
 end
 
 local function _is_installed(dependency)
-    local success, exitcode = _execute(APT, {"dpkg", "-p", dependency})
+    local success, exitcode = _execute("dpkg", {"-l", dependency})
     return success and exitcode == 0
 end
 
