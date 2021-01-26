@@ -1,12 +1,7 @@
-local util = require "eli.util"
 local values, generate_safe_functions = util.values, util.generate_safe_functions
-local eprocLoaded, eproc = pcall(require, "eli.proc.extra")
-local eenvLoaded, eenv = pcall(require, "eli.env.extra")
-local fs = require "eli.fs"
 local is_tty = require "is_tty".is_stdout_tty()
 
-local _exString = require "eli.extensions.string"
-local _trace, _debug = require "eli.util".global_log_factory("plugin/apt", "trace", "debug")
+local _trace, _debug = util.global_log_factory("plugin/apt", "trace", "debug")
 
 local function get_apt_binary()
     local os = require "os"
@@ -37,25 +32,16 @@ end
 
 local APT = get_apt_binary()
 assert(APT, "No supported 'apt' binary found")
-assert(eprocLoaded, "APT plugin requires posix proc extra api (eli.proc.extra)")
-assert(eenvLoaded, "APT plugin requires posix env extra api (eli.env.extra)")
+assert(proc.EPROC, "APT plugin requires posix proc extra api (eli.proc.extra)")
+assert(env.EENV, "APT plugin requires posix env extra api (eli.env.extra)")
 
 local function _execute(cmd, args, options)
-    _trace "Creating pipes"
-    local rd, proc_wr = fs.pipe()
-    local rderr, proc_werr = fs.pipe()
-    rd:set_nonblocking(true)
-    rderr:set_nonblocking(true)
-    _trace "pipes created"
-
     if type(options) ~= "table" then
         options = {}
     end
     _trace {msg = "Spawning " .. cmd, args = args, env = options.env, cmd = cmd}
 
-    local proc, err = eproc.spawn {stdout = proc_wr, stderr = proc_werr, command = cmd, args = args, env = options.env}
-    proc_wr:close()
-    proc_werr:close()
+    local proc, err = proc.spawn(cmd,  args, { stdio = { stdout = "pipe", stderr = "pipe" }, env = options.env})
 
     if not proc then
         _debug {msg = "Failed to start " .. cmd, error = err}
@@ -66,14 +52,18 @@ local function _execute(cmd, args, options)
 
     if type(options.stdout_cb) ~= "function" and type(options.stderr_cb) ~= "function" then
         proc:wait()
-        stdout = rd:read "a"
-        stderr = rderr:read "a"
+        stdout = proc:get_stdout():read "a"
+        stderr = proc:get_stderr():read "a"
     else
+        local _stdoutStream = proc:get_stdout()
+        local _stderrStream = proc:get_stderr()
+        _stdoutStream:set_nonblocking(true)
+        _stderrStream:set_nonblocking(true)
         while not proc:exited() do
-            local noOutput = false
+            local noOutput
             if type(options.stdout_cb) == "function" then
                 repeat
-                    local tmp = rd:read("L")
+                    local tmp = _stdoutStream:read("L")
                     stdout = stdout .. (tmp or "")
                     options.stdout_cb(tmp)
                     noOutput = tmp == ""
@@ -82,7 +72,7 @@ local function _execute(cmd, args, options)
 
             if type(options.stderr_cb) == "function" then
                 repeat
-                    local tmp = rderr:read("L")
+                    local tmp = _stderrStream:read("L")
                     stderr = stderr .. (tmp or "")
                     noOutput = tmp == ""
                     if options.colorful or (options.colorful == nil and is_tty) then
@@ -91,14 +81,14 @@ local function _execute(cmd, args, options)
                     options.stderr_cb(tmp)
                 until (noOutput)
             end
-            eproc.sleep(1)
+            os.sleep(1)
         end
 
         proc:wait()
-        stdout = stdout .. rd:read("a")
-        stderr = stderr .. rderr:read("a")
+        stdout = stdout .. _stdoutStream:read("a")
+        stderr = stderr .. _stderrStream:read("a")
     end
-    local exitCode = proc:exitcode()
+    local exitCode = proc:get_exitcode()
     _trace {msg = cmd .. " exited", exitcode = exitCode, stdout = stdout, stderr = stderr}
     return exitCode == 0, exitCode, stdout, stderr
 end
@@ -113,7 +103,7 @@ local function install(dependencies, options)
     if type(dependencies) == "table" then
         dependencies = values(dependencies)
     elseif type(dependencies) == "string" then
-        dependencies = _exString.split(dependencies)
+        dependencies = string.split(dependencies, " ")
     end
 
     for i, dependency in ipairs(dependencies) do
@@ -137,7 +127,7 @@ local function install_non_interactive(dependencies, options)
     if type(options) ~= "table" then
         options = {}
     end
-    local env = options.env or eenv.environment()
+    local env = options.env or env.environment()
     env.DEBIAN_FRONTEND = "noninteractive"
     options.env = env
     return install(dependencies, options)
@@ -152,7 +142,7 @@ local function upgrade_non_interactive(options)
     if type(options) ~= "table" then
         options = {}
     end
-    local env = options.env or eenv.environment()
+    local env = options.env or env.environment()
     env.DEBIAN_FRONTEND = "noninteractive"
     options.env = env
     return upgrade(options)

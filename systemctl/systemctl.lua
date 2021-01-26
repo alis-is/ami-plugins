@@ -4,26 +4,16 @@ assert(os.execute('systemctl --version 2>&1 >/dev/null'), "systemctl not found")
 assert(proc.EPROC, "systemctl plugin requires posix proc extra api (eli.proc.extra)")
 
 local _exec_systemctl = function(...)
-    local _cmd = exString.join_strings(" ", ...)
-    local _rd, _proc_wr = fs.pipe()
-    local _rderr, _proc_werr = fs.pipe()
-
+    local _cmd = string.join_strings(" ", ...)
     _trace("Executing systemctl " .. _cmd)
-    local _proc, _err = proc.spawn {"systemctl", args = { ... }, stdout = _proc_wr, stderr = _proc_werr}
-    _proc_wr:close()
-    _proc_werr:close()
-
+    local _proc = proc.spawn("systemctl", { ... }, {stdio = { stdout = "pipe", stderr = "pipe" }, wait = true })
     if not _proc then
-        _rd:close()
-        _rderr:close()
         error("Failed to execute systemctl command: " .. _cmd)
     end
-    local _exitcode = _proc:wait() 
-    _trace("systemctl exit code: " .. _exitcode)
-    local _stderr = _rderr:read("a")
-    local _stdout = _rd:read("a")
-    assert(_exitcode == 0, "Failed to execute systemctl command: " .. _cmd)
-    return _exitcode, _stdout, _stderr
+    _trace("systemctl exit code: " .. _proc.exitcode)
+    local _stderr = _proc.stderrStream:read("a")
+    local _stdout = _proc.stdoutStream:read("a")
+    return _proc.exitcode, _stdout, _stderr
 end
 
 local function _install_service(sourceFile, serviceName)
@@ -49,10 +39,11 @@ end
 
 local function _remove_service(serviceName)
     _trace("Removing service: " .. serviceName)
-    _stop_service(serviceName)
+    local _exitcode = _exec_systemctl("stop", serviceName)
+    assert(_exitcode == 0 or _exitcode == 5, "Failed to stop service")
     _trace("Service " .. serviceName .. "stopped...")
     local _ok, _error = fs.safe_remove("/etc/systemd/system/" .. serviceName .. ".service")
-    if not _ok then 
+    if not _ok then
         error("Failed to remove " .. serviceName .. ".service - " .. (_error or ""))
     end
     _exec_systemctl("daemon-reload")
@@ -65,6 +56,7 @@ local function _get_service_status(serviceName)
     assert(_exitcode == 0, "Failed to get service status")
     local _status = _stdout:match("%s*(%S*)")
     local _exitcode, _stdout = _exec_systemctl("show", "-p", "ExecMainStartTimestamp", "--value", serviceName)
+    assert(_exitcode == 0, "Failed to get service start timestamp")
     local _started = type(_stdout) == "string" and _stdout:gsub("^%s*(.-)%s*$", "%1")
     _trace("Got service " .. serviceName .. " status - " .. (_status or ""))
     return _status, _started
