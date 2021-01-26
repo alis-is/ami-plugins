@@ -1,15 +1,15 @@
-local _trace, _debug = require"eli.util".global_log_factory("plugin/systemctl", "trace", "debug")
+local _trace, _debug = util.global_log_factory("plugin/systemctl", "trace", "debug")
 
 assert(os.execute('systemctl --version 2>&1 >/dev/null'), "systemctl not found")
-assert(eliProc.EPROC, "systemctl plugin requires posix proc extra api (eli.proc.extra)")
+assert(proc.EPROC, "systemctl plugin requires posix proc extra api (eli.proc.extra)")
 
 local _exec_systemctl = function(...)
     local _cmd = exString.join_strings(" ", ...)
-    local _rd, _proc_wr = eliFs.pipe()
-    local _rderr, _proc_werr = eliFs.pipe()
+    local _rd, _proc_wr = fs.pipe()
+    local _rderr, _proc_werr = fs.pipe()
 
     _trace("Executing systemctl " .. _cmd)
-    local _proc, _err = eliProc.spawn {"systemctl", args = { ... }, stdout = _proc_wr, stderr = _proc_werr}
+    local _proc, _err = proc.spawn {"systemctl", args = { ... }, stdout = _proc_wr, stderr = _proc_werr}
     _proc_wr:close()
     _proc_werr:close()
 
@@ -27,7 +27,7 @@ local _exec_systemctl = function(...)
 end
 
 local function _install_service(sourceFile, serviceName)
-    local _ok, _error = eliFs.safe_copy_file(sourceFile, "/etc/systemd/system/" .. serviceName .. ".service")
+    local _ok, _error = fs.safe_copy_file(sourceFile, "/etc/systemd/system/" .. serviceName .. ".service")
     assert(_ok, "Failed to install " .. serviceName .. ".service - " .. (_error or ""))
     _exec_systemctl("daemon-reload")
     _exec_systemctl("enable", serviceName .. ".service")
@@ -51,7 +51,7 @@ local function _remove_service(serviceName)
     _trace("Removing service: " .. serviceName)
     _stop_service(serviceName)
     _trace("Service " .. serviceName .. "stopped...")
-    local _ok, _error = eliFs.safe_remove("/etc/systemd/system/" .. serviceName .. ".service")
+    local _ok, _error = fs.safe_remove("/etc/systemd/system/" .. serviceName .. ".service")
     if not _ok then 
         error("Failed to remove " .. serviceName .. ".service - " .. (_error or ""))
     end
@@ -70,7 +70,7 @@ local function _get_service_status(serviceName)
     return _status, _started
 end
 
-return eliUtil.generate_safe_functions({
+return util.generate_safe_functions({
     install_service = _install_service,
     start_service = _start_service,
     stop_service = _stop_service,
