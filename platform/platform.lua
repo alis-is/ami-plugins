@@ -9,7 +9,7 @@ end
 
 local function _get_platform() 
     local _delim = package.config:sub(1,1);
-    if _delim == '\\' then 
+    if _delim == '\\' then
         -- windows
         _debug{ msg="Assuming windows platform." }
         local _success, _exit, _code, _output = _execute('systeminfo.exe');

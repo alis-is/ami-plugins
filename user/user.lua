@@ -5,7 +5,7 @@ local function _execute_cmd_as(cmd, user)
 end
 
 local function _add_user(user, options)
-    if type(options) ~= 'table' then 
+    if type(options) ~= 'table' then
         options = {
             disableLogin = false,
             disablePassword = false,
@@ -13,7 +13,7 @@ local function _add_user(user, options)
         }
     end
     local _cmd = 'adduser '
-    if options.disableLogin then 
+    if options.disableLogin then
         _cmd = _cmd .. "--disabled-login "
     end
     if options.disablePassword then 
@@ -30,14 +30,14 @@ local function _whoami()
     local _whoami = io.popen("whoami")
     local _user = _whoami:read("l")
     local _res, _code = _whoami:close()
-    if _res then 
-        return _user 
+    if _res then
+        return _user
     else
-        return _res, _code 
+        return _res, _code
     end
 end
 
-local function _is_root() 
+local function _is_root()
     local _root = os.execute('sh -c \'[ "$(id -u)" -eq "0" ] && exit 0 || exit 1\'')
     local _admin = os.execute('cmd.exe /C "NET SESSION >nul 2>&1 && EXIT /B 0 || EXIT /B 1"')
     return _root or _admin
