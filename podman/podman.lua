@@ -68,20 +68,13 @@ local function _build(dockerfile, name)
     return _ok, _exitcode
 end
 
---local function _create_pod(name, options)
---    --publish=port, -p
---    --network=slirp4netns:outbound_addr
---    local _ok, _exitcode = os.execute("podman pod create --name " .. name)
---    return _ok, _exitcode
---end
---
---local function _remove_pod(name)
---    local _ok, _exitcode = os.execute("podman pod rm -f " .. name)
---    return _ok, _exitcode
---end
+local function _podman_pull(imageOrCmd)
+    local _ok, _exitcode = os.execute("podman pull " .. imageOrCmd)
+    return _ok, _exitcode
+end
 
 local function _podman_internal_exec(method, container, command, options)
-    if type(method) ~= "string" then 
+    if type(method) ~= "string" then
         method = "run"
     end
     if type(options) ~= "table" then
@@ -97,7 +90,10 @@ local function _podman_internal_exec(method, container, command, options)
         options.stderr = "pipe"
     end
     _trace("Executing: " .. "podman " .. method .. " " .. options.args .. " " .. container .. " " .. command)
-    return proc.exec("podman " .. method .. " " .. options.args .. " " .. container .. " " .. command, {stdout = options.stdout, stderr = options.stderr})
+    return proc.exec(
+        "podman " .. method .. " " .. options.args .. " " .. container .. " " .. command,
+        {stdout = options.stdout, stderr = options.stderr}
+    )
 end
 
 local function _exec_podman(container, command, options)
@@ -130,7 +126,7 @@ return _eliUtil.generate_safe_functions(
         build = _build,
         exec = _exec_podman,
         run = _run_podman,
-        --create_pod = _create_pod,
-        --remove_pod = _remove_pod
+        pull = _podman_pull,
+        podman = _podman_internal_exec
     }
 )
