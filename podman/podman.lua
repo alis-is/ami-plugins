@@ -1,6 +1,8 @@
 local _eliUtil = require "eli.util"
 local _trace, _debug = _eliUtil.global_log_factory("plugin/podman", "trace", "debug")
 
+local podman = {}
+
 local _distroSetupFns = {
     ["ubuntu"] = function(platformInfo)
         _debug("Installing podman on Uubuntu...")
@@ -33,19 +35,35 @@ local _distroSetupFns = {
         local _apt = APT_PLUGIN or am.plugin.get("apt")
         local _ok = _apt.update()
         assert(_ok, "Failed to apt update!")
-        _apt.install("podman")
+        _apt.install("podman slirp4netns")
     end
     --    ["debian"] = function(platformInfo)
     --  // TODO
     --    end
 }
 
-local function _is_installed()
-    return os.execute("podman --version 2>&1 >/dev/null")
+local function _escape(s)
+	s = s:gsub("'", "\'")
+    s = s:gsub("\\", "\\\\")
+	return s
 end
 
-local function _install()
-    if _is_installed() then
+local function _os_execute(cmd, options)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    if type(options.runas) == "string" then
+        cmd = "su " .. options.runas .. " -c '" .. _escape(cmd) .. "'"
+    end
+    return os.execute(cmd)
+end
+
+function podman.is_installed()
+    return _os_execute("podman --version 2>&1 >/dev/null")
+end
+
+function podman.install()
+    if podman.is_installed() then
         _debug("Podman is already installed. Skipping installation...")
         return
     end
@@ -58,24 +76,28 @@ local function _install()
     _installFn(_platformInfo)
 end
 
-local function _build(dockerfile, name)
+function podman.build(dockerfile, name, options)
     local _tag = ""
     if type(name) == "string" then
         _tag = "--tag " .. name .. " "
     end
     _trace("Executing: " .. "podman build " .. _tag .. " -f " .. dockerfile)
-    local _ok, _exitcode = os.execute("podman build " .. _tag .. " -f " .. dockerfile)
+    local _ok, _exitcode = _os_execute("podman build " .. _tag .. " -f " .. dockerfile, options)
     return _ok, _exitcode
 end
 
-local function _podman_pull(imageOrCmd)
-    local _ok, _exitcode = os.execute("podman pull " .. imageOrCmd)
+function podman.pull(imageOrCmd, options)
+    local _ok, _exitcode = _os_execute("podman pull " .. imageOrCmd, options)
     return _ok, _exitcode
 end
 
-local function _podman_internal_exec(method, container, command, options)
+function podman.raw_exec(method, container, commandOrOptions, options)
     if type(method) ~= "string" then
         method = "run"
+    end
+    if type(commandOrOptions) == "table" then
+        options = commandOrOptions
+        commandOrOptions = nil
     end
     if type(options) ~= "table" then
         options = {}
@@ -89,24 +111,25 @@ local function _podman_internal_exec(method, container, command, options)
     if type(options.stderr) ~= "string" then
         options.stderr = "pipe"
     end
-    _trace("Executing: " .. "podman " .. method .. " " .. options.args .. " " .. container .. " " .. command)
-    return proc.exec(
-        "podman " .. method .. " " .. options.args .. " " .. container .. " " .. command,
-        {stdout = options.stdout, stderr = options.stderr}
-    )
+    _trace("Executing: " .. "podman " .. method .. " " .. options.args .. " " .. container .. " " .. (commandOrOptions or ""))
+    local cmd = "podman " .. method .. " " .. options.args .. " " .. container .. " " .. (commandOrOptions or "")
+    if type(options.runas) == "string" then
+        cmd = "su " .. options.runas .. " -c '" .. _escape(cmd) .. "'"
+    end
+    return proc.exec(cmd, {stdout = options.stdout, stderr = options.stderr})
 end
 
-local function _exec_podman(container, command, options)
+function podman.exec(container, command, options)
     if type(options) ~= "table" then
         options = {}
     end
     if type(options.args) ~= "string" then
         options.args = "-it"
     end
-    return _podman_internal_exec("exec", container, command, options)
+    return podman.raw_exec("exec", container, command, options)
 end
 
-local function _run_podman(image, command, options)
+function podman.run(image, command, options)
     if type(options) ~= "table" then
         options = {}
     end
@@ -116,17 +139,7 @@ local function _run_podman(image, command, options)
     if type(options.container) == "string" then
         options.args = options.args .. " --name " .. options.container
     end
-    return _podman_internal_exec("run", image, command, options)
+    return podman.raw_exec("run", image, command, options)
 end
 
-return _eliUtil.generate_safe_functions(
-    {
-        install = _install,
-        is_installed = _is_installed,
-        build = _build,
-        exec = _exec_podman,
-        run = _run_podman,
-        pull = _podman_pull,
-        podman = _podman_internal_exec
-    }
-)
+return _eliUtil.generate_safe_functions(podman)
