@@ -95,7 +95,12 @@ end
 
 local function _is_installed(dependency)
     local success, exitcode = _execute("dpkg", {"-l", dependency})
-    return success and exitcode == 0
+    if not success or exitcode ~= 0 then return false end
+    local success, exitcode, stdout = _execute("apt", {"-qq", "list", dependency})
+    if not success or exitcode ~= 0 then -- apt may not be available we rely on dpkg only
+        return true
+    end
+    return stdout:match("installed")
 end
 
 local function install(dependencies, options)
@@ -175,3 +180,4 @@ return generate_safe_functions(
         upgrade_non_interactive = upgrade_non_interactive
     }
 )
+
