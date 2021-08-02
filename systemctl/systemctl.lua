@@ -19,10 +19,10 @@ function _systemctl.exec(...)
 end
 
 function _systemctl.install_service(sourceFile, serviceName, options)
-    if type(options) ~= "table" then 
+    if type(options) ~= "table" then
         options = {}
     end
-    if type(options.kind) ~= "string" then 
+    if type(options.kind) ~= "string" then
        options.kind = "service"
     end
     local _ok, _error = fs.safe_copy_file(sourceFile, "/etc/systemd/system/" .. serviceName .. "." .. options.kind)
@@ -62,6 +62,12 @@ function _systemctl.remove_service(serviceName, options)
     local _exitcode = _systemctl.exec("stop", serviceName)
     assert(_exitcode == 0 or _exitcode == 5, "Failed to stop service")
     _trace("Service " .. serviceName .. "stopped...")
+
+	_trace("Disabling service...")
+	assert(_systemctl.exec("disable", serviceName .. "." .. options.kind) == 0, "Failed to disable service " .. serviceName .. "!")
+	_trace("Service disabled.")
+
+	_trace("Removing service...")
     local _ok, _error = fs.safe_remove("/etc/systemd/system/" .. serviceName .. "." .. options.kind)
     if not _ok then
         error("Failed to remove " .. serviceName .. "." .. options.kind ..  " - " .. (_error or ""))
