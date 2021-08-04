@@ -8,7 +8,7 @@ local _distroSetupFns = {
         _debug("Installing podman on Uubuntu...")
         local _versionId = platformInfo.DISTRO_VERSION
         assert(type(_versionId) == "string", "Invalid ubuntu version!")
-        assert(ver.compare_version("20.04", _versionId) <= 0, "Lowest supported Ubuntu version is 20.04!")
+        assert(ver.compare("20.04", _versionId) <= 0, "Lowest supported Ubuntu version is 20.04!")
         -- add apt repository
         _debug("Adding kubic sources...")
         fs.write_file(
