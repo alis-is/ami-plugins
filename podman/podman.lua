@@ -1,5 +1,5 @@
-local _eliUtil = require "eli.util"
-local _trace, _debug = _eliUtil.global_log_factory("plugin/podman", "trace", "debug")
+local util = require "eli.util"
+local _trace, _debug = util.global_log_factory("plugin/podman", "trace", "debug")
 
 local podman = {}
 
