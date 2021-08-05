@@ -64,7 +64,7 @@ local function _os_execute(cmd, options)
         options = {}
     end
     if type(options.runas) == "string" then
-        cmd = "su " .. options.runas .. " -c '" .. _escape(cmd) .. "'"
+        cmd = "su -l " .. options.runas .. " -c 'cd \"" .. _escape(os.cwd()) .."\" && " .. _escape(cmd) .. "'"
     end
     _trace("Executing: " .. cmd)
     return os.execute(cmd)
@@ -137,7 +137,7 @@ function podman.raw_exec(method, options)
     end    
 
     if type(options.runas) == "string" then
-        cmd = "su " .. options.runas .. " -c '" .. _escape(cmd) .. "'"
+        cmd = "su -l " .. options.runas .. " -c 'cd \"" .. _escape(os.cwd()) .."\" && " .. _escape(cmd) .. "'"
     end
     _trace("Executing: " .. cmd)
     if options.stdPassthrough then 
