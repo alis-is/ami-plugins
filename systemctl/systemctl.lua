@@ -84,12 +84,12 @@ end
 
 function _systemctl.get_service_status(serviceName)
     _trace("Getting service " .. serviceName .. "status...")
-    local _exitcode, _stdout = _systemctl.exec("show", "-p", "SubState", "--value", serviceName)
+    local _exitcode, _stdout = _systemctl.exec("show", "-p", "SubState", serviceName)
     assert(_exitcode == 0, "Failed to get service status")
-    local _status = _stdout:match("%s*(%S*)")
-    local _exitcode, _stdout = _systemctl.exec("show", "-p", "ExecMainStartTimestamp", "--value", serviceName)
+    local _status = _stdout:match("SubState=%s*(%S*)")
+    local _exitcode, _stdout = _systemctl.exec("show", "-p", "ExecMainStartTimestamp", serviceName)
     assert(_exitcode == 0, "Failed to get service start timestamp")
-    local _started = type(_stdout) == "string" and _stdout:gsub("^%s*(.-)%s*$", "%1")
+    local _started = type(_stdout) == "string" and _stdout:match("^ExecMainStartTimestamp=%s*(.-)%s*$")
     _trace("Got service " .. serviceName .. " status - " .. (_status or ""))
     return _status, _started
 end
