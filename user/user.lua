@@ -1,34 +1,69 @@
-local _trace, _debug = require"eli.util".global_log_factory("plugin/platform", "trace", "debug")
+local _debug, _warn = require 'eli.util'.global_log_factory('plugin/platform', 'debug', 'warn')
 
-local function _execute_cmd_as(cmd, user)
-    return os.execute("su " .. user .. " -c " .. cmd)
+local user = {}
+
+function user.execute_cmd_as(cmd, user)
+    return os.execute('su ' .. user .. ' -c ' .. cmd)
 end
 
-local function _add_user(user, options)
+local function _lock_user()
+    local _lockFile = '/var/run/ami.plugin.user.lockfile'
+    if not fs.exists(_lockFile) then
+        fs.write_file(_lockFile, '')
+    end
+    return fs.lock_file(_lockFile, 'w')
+end
+
+local function _unlock_user(lock)
+    local _ok, _error = pcall(fs.unlock_file, lock)
+    if not _ok then _warn("Failed to unlock plugin.user.lockfile - " .. tostring(_error) .. "!") end
+end
+
+function user.add(user, options)
+    local _lock
+    while _lock == nil do
+        _lock, _err = _lock_user()
+        _debug('Waiting for add user lock...')
+        os.sleep(1)
+    end
+
+    local _ok, _uid = user.get_uid(user)
+    if _ok and type(_uid) == "number" then
+        _unlock_user(_lock)
+        return true, "exit", 0
+    end
+
     if type(options) ~= 'table' then
         options = {
             disableLogin = false,
             disablePassword = false,
-            gecos = ""
+            gecos = ''
         }
     end
     local _cmd = 'adduser '
     if options.disableLogin then
-        _cmd = _cmd .. "--disabled-login "
+        _cmd = _cmd .. '--disabled-login '
     end
-    if options.disablePassword then 
-        _cmd = _cmd .. "--disabled-password "
+    if options.disablePassword then
+        _cmd = _cmd .. '--disabled-password '
     end
-    if options.gecos then 
+    if options.gecos then
         _cmd = _cmd .. '--gecos "' .. options.gecos .. '" '
     end
 
-    return os.execute(_cmd .. _user)
+    _debug('Creating user: ' .. tostring(user))
+    local _result = os.execute(_cmd .. user)
+    _unlock_user(_lock)
+    return _result
 end
 
-local function _whoami()
-    local _whoami = io.popen("whoami")
-    local _user = _whoami:read("l")
+function user.get_uid(user)
+    return fs.safe_getuid(user)
+end
+
+function user.whoami()
+    local _whoami = io.popen('whoami')
+    local _user = _whoami:read('l')
     local _res, _code = _whoami:close()
     if _res then
         return _user
@@ -37,16 +72,12 @@ local function _whoami()
     end
 end
 
-local function _is_root()
-    local _root = os.execute('sh -c \'[ "$(id -u)" -eq "0" ] && exit 0 || exit 1\'')
+function user.get_current_user() return user.whoami() end
+
+function user.is_root()
+    local _root = os.execute("sh -c '[ \"$(id -u)\" -eq \"0\" ] && exit 0 || exit 1'")
     local _admin = os.execute('cmd.exe /C "NET SESSION >nul 2>&1 && EXIT /B 0 || EXIT /B 1"')
     return _root or _admin
 end
 
-return {
-    execute_cmd_as = _execute_cmd_as,
-    add_user = _add_user,
-    whoami = _whoami,
-    is_admin = _is_root,
-    is_root = _is_root
-}
+return user

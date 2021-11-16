@@ -1,7 +1,7 @@
 local _ok, _util = pcall(require, "eli.util")
-local _trace = function()
+local _trace = function(...)
 end
-local _debug = function()
+local _debug = function(...)
 end
 if _ok then
     _trace, _debug = _util.global_log_factory("plugin/platform", "trace", "debug")
