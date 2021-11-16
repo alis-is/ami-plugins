@@ -19,7 +19,7 @@ local function _unlock_user(lock)
     if not _ok then _warn("Failed to unlock plugin.user.lockfile - " .. tostring(_error) .. "!") end
 end
 
-function user.add(user, options)
+function user.add(userName, options)
     local _lock
     while _lock == nil do
         _lock, _err = _lock_user()
@@ -27,7 +27,7 @@ function user.add(user, options)
         os.sleep(1)
     end
 
-    local _ok, _uid = user.get_uid(user)
+    local _ok, _uid = user.get_uid(userName)
     if _ok and type(_uid) == "number" then
         _unlock_user(_lock)
         return true, "exit", 0
@@ -51,8 +51,8 @@ function user.add(user, options)
         _cmd = _cmd .. '--gecos "' .. options.gecos .. '" '
     end
 
-    _debug('Creating user: ' .. tostring(user))
-    local _result = os.execute(_cmd .. user)
+    _debug('Creating user: ' .. tostring(userName))
+    local _result = os.execute(_cmd .. userName)
     _unlock_user(_lock)
     return _result
 end
