@@ -22,7 +22,7 @@ end
 function user.add(userName, options)
     local _lock
     while _lock == nil do
-        _lock, _err = _lock_user()
+        _lock, _ = _lock_user()
         _debug('Waiting for add user lock...')
         os.sleep(1)
     end

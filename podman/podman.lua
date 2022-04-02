@@ -174,4 +174,4 @@ function podman.run(image, command, options)
     return podman.raw_exec("run", options)
 end
 
-return _eliUtil.generate_safe_functions(podman)
+return util.generate_safe_functions(podman)

@@ -1,8 +1,8 @@
-function _test() 
+local function _test() 
     return "remote test plugin"
 end
 
-function _version()
+local function _version()
     return "0.0.1"
 end
 

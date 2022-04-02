@@ -58,6 +58,9 @@ function _systemctl.remove_service(serviceName, options)
     if type(options.kind) ~= "string" then
        options.kind = "service"
     end
+    local _serviceUnitFile = "/etc/systemd/system/" .. serviceName .. "." .. options.kind
+    if not fs.exists(_serviceUnitFile) then return end -- service not found so skip
+
     _trace("Removing service: " .. serviceName)
     local _exitcode = _systemctl.exec("stop", serviceName)
     assert(_exitcode == 0 or _exitcode == 5, "Failed to stop service")
@@ -68,11 +71,11 @@ function _systemctl.remove_service(serviceName, options)
 	_trace("Service disabled.")
 
 	_trace("Removing service...")
-    local _ok, _error = fs.safe_remove("/etc/systemd/system/" .. serviceName .. "." .. options.kind)
+    local _ok, _error = fs.safe_remove(_serviceUnitFile)
     if not _ok then
         error("Failed to remove " .. serviceName .. "." .. options.kind ..  " - " .. (_error or ""))
     end
-    
+
     if type(options.daemonReload) ~= "boolean" or options.daemonReload == true then
         local _exitcode, _stdout, _stderr = _systemctl.exec("daemon-reload")
         if _exitcode ~= 0 then
