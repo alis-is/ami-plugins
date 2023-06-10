@@ -57,6 +57,19 @@ function user.add(userName, options)
     return _result
 end
 
+function user.add_into_group(user, group)
+    local _lock
+    while _lock == nil do
+        _lock, _ = _lock_user()
+        _debug('Waiting for group add user lock...')
+        os.sleep(1)
+    end
+
+    local _result = os.execute('usermod -a -G ' .. group .. ' ' .. user)
+    _unlock_user(_lock)
+    return _result
+end
+
 function user.get_uid(user)
     return fs.safe_getuid(user)
 end
