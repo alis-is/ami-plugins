@@ -50,7 +50,7 @@ jobs:
           file: build/*.zip
 
       - name: Air Repository Dispatch
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v2
         if: ${{ steps.check_release_required.outputs.PAYLOAD != '' }}
         with:
           token: ${{ secrets.AIR_AT }}
