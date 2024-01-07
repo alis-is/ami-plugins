@@ -105,7 +105,7 @@ function asctl.get_service_status(serviceName)
         error("Failed to get service status")
     end
     local status = serviceStatus.active and "running" or "stopped"
-    local started = serviceStatus.started and os.date("%a %Y-%m-%d %H:%M:%S CET", serviceStatus.started)
+    local started = serviceStatus.started and os.date("%a %Y-%m-%d %H:%M:%S", serviceStatus.started)
     return status, started
 end
 
