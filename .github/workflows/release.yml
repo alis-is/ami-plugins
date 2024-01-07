@@ -38,6 +38,7 @@ jobs:
           RELEASE_ID: ${{steps.prepare_release.outputs.RELEASE_ID}}
         run: |
           export PAYLOAD=$(eli tools/check-release-required.lua)
+          echo "PAYLOAD=$PAYLOAD" >> $GITHUB_OUTPUT
 
       - name: Upload files to a GitHub release
         uses: svenstaro/upload-release-action@2.7.0
