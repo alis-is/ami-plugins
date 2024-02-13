@@ -48,13 +48,16 @@ end))
 local versions = string.join(",", table.map(toBeReleased, function(item) return item.version end))
 local hashes = string.join(",", table.map(toBeReleased, function(item) return item.sha256 end))
 
+local REPOSITORY = os.getenv("GITHUB_REPOSITORY")
+
 io.write(
 	string.interpolate(
-	'{ "id": "${ids}", "repository": "\\${{github.repository}}", "version": "${versions}", "package": "${packages}", "sha256": "${hashes}"}',
+	'{ "id": "${ids}", "repository": "${repository}", "version": "${versions}", "package": "${packages}", "sha256": "${hashes}"}',
 		{
 			ids = ids,
 			versions = versions,
 			packages = sources,
-			hashes = hashes
+			hashes = hashes,
+			repository = REPOSITORY
 		})
 )

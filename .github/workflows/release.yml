@@ -3,57 +3,58 @@ name: release
 on:
   push:
     branches:
-      - main
+    - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
-      - name: setup eli
-        uses: alis-is/setup-eli@v1
-        with:
-          prerelase: true
+    - name: setup eli
+      uses: alis-is/setup-eli@v1
+      with:
+        prerelase: true
 
-      - name: build plugins
-        run: eli tools/build.lua
+    - name: build plugins
+      run: eli tools/build.lua
 
-      - name: build plugins
-        run: |
-          eli tools/build.lua
+    - name: build plugins
+      run: |
+        eli tools/build.lua
 
-      - name: create release id
-        id: prepare_release
-        run: |
-          export RELEASE_ID=$(date +'%y%m%d%H%M')
-          echo "RELEASE_ID=$RELEASE_ID" >> $GITHUB_OUTPUT
+    - name: create release id
+      id: prepare_release
+      run: |
+        export RELEASE_ID=$(date +'%y%m%d%H%M')
+        echo "RELEASE_ID=$RELEASE_ID" >> $GITHUB_OUTPUT
 
-      - name: check release required
-        id: check_release_required
-        env: 
-          RELEASE_ID: ${{steps.prepare_release.outputs.RELEASE_ID}}
-        run: |
-          export PAYLOAD=$(eli tools/check-release-required.lua)
-          echo "PAYLOAD=$PAYLOAD" >> $GITHUB_OUTPUT
+    - name: check release required
+      id: check_release_required
+      env:
+        RELEASE_ID: ${{steps.prepare_release.outputs.RELEASE_ID}}
+        GITHUB_REPOSITORY: ${{github.repository}}
+      run: |
+        export PAYLOAD=$(eli tools/check-release-required.lua)
+        echo "PAYLOAD=$PAYLOAD" >> $GITHUB_OUTPUT
 
-      - name: Upload files to a GitHub release
-        uses: svenstaro/upload-release-action@2.7.0
-        if: ${{ steps.check_release_required.outputs.PAYLOAD != '' }}
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{steps.prepare_release.outputs.RELEASE_ID}}
-          file_glob: true
-          file: build/*.zip
+    - name: Upload files to a GitHub release
+      uses: svenstaro/upload-release-action@2.7.0
+      if: ${{ steps.check_release_required.outputs.PAYLOAD != '' }}
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        tag: ${{steps.prepare_release.outputs.RELEASE_ID}}
+        file_glob: true
+        file: build/*.zip
 
-      - name: Air Repository Dispatch
-        uses: peter-evans/repository-dispatch@v2
-        if: ${{ steps.check_release_required.outputs.PAYLOAD != '' }}
-        with:
-          token: ${{ secrets.AIR_AT }}
-          repository: alis-is/air
-          event-type: app-release
-          client-payload: '${{ steps.check_release_required.outputs.PAYLOAD }}'
+    - name: Air Repository Dispatch
+      uses: peter-evans/repository-dispatch@v2
+      if: ${{ steps.check_release_required.outputs.PAYLOAD != '' }}
+      with:
+        token: ${{ secrets.AIR_AT }}
+        repository: alis-is/air
+        event-type: app-release
+        client-payload: '${{ steps.check_release_required.outputs.PAYLOAD }}'
