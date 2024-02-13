@@ -91,6 +91,19 @@ function _systemctl.get_service_status(serviceName)
     assert(_exitcode == 0, "Failed to get service status")
     local _status = _stdout:match("SubState=%s*(%S*)")
     local _exitcode, _stdout = _systemctl.exec("show", "--timestamp=utc", "-p", "ExecMainStartTimestamp", serviceName)
+    if _exitcode ~= 0 then -- fallback
+        _exitcode, _stdout = _systemctl.exec("show", "-p", "ExecMainStartTimestamp", serviceName)
+        assert(_exitcode == 0, "Failed to get service start timestamp")
+        local _started = type(_stdout) == "string" and _stdout:match("^ExecMainStartTimestamp=%s*(.-)%s*$")
+        -- adjust to UTC
+        local _proc = proc.spawn("date", { "-u",  "-d", tostring(_started), '+ExecMainStartTimestamp=%a %Y-%m-%d %H:%M:%S UTC' }, {stdio = { stdout = "pipe", stderr = "pipe" }, wait = true })
+        if not _proc then
+            error("Failed to execute date command")
+        end
+        _trace("date exit code: " .. _proc.exitcode)
+        _stdout = _proc.stdoutStream:read("a")
+        _exitcode = _proc.exitcode
+    end
     assert(_exitcode == 0, "Failed to get service start timestamp")
     local _started = type(_stdout) == "string" and _stdout:match("^ExecMainStartTimestamp=%s*(.-)%s*$")
     _trace("Got service " .. serviceName .. " status - " .. (_status or ""))
