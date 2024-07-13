@@ -3,12 +3,71 @@ local _trace, _warn = util.global_log_factory("plugin/systemctl", "trace", "warn
 assert(os.execute('systemctl --version 2>&1 >/dev/null'), "systemctl not found")
 assert(proc.EPROC, "systemctl plugin requires posix proc extra api (eli.proc.extra)")
 
-local _systemctl = {}
+local function get_systemd_version()
+    --- check systemd version
+    local p <close> = io.popen("systemctl --version")
+    if not p then
+        _trace("failed to get systemd version")
+        return 0
+    end
+    local version = p:read("*a")
+    --- e.g. systemd 249 (249.11-0ubuntu3.12)
+    local ver = tonumber(version:match("systemd (%d+)"))
+    return type(ver) == "number" and ver or 0
+end
 
-function _systemctl.exec(...)
-    local _cmd = string.join_strings(" ", ...)
+local supportsContainerFlag = get_systemd_version() >= 249
+
+---@class SystemctlExecOptions
+---@field container string?
+
+---@class SystemctlInstallServiceOptions: SystemctlExecOptions
+---@field kind string?
+---@field daemonReload boolean?
+
+---@class SystemctlRemoveServiceOptions: SystemctlExecOptions
+---@field kind string?
+---@field daemonReload boolean?
+
+---@class Systemctl
+---@field exec fun(options: SystemctlExecOptions?, ...: string): number, string, string
+---@field install_service fun(sourceFile: string, serviceName: string, options: SystemctlInstallServiceOptions?)
+---@field start_service fun(serviceName: string, options: SystemctlExecOptions?)
+---@field stop_service fun(serviceName: string, options: SystemctlExecOptions?)
+---@field remove_service fun(serviceName: string, options: SystemctlRemoveServiceOptions?)
+---@field get_service_status fun(serviceName: string, options: SystemctlExecOptions?): string, string   
+---@field with_options fun(options: SystemctlExecOptions): Systemctl
+
+---executes systemctl command
+---@param options SystemctlExecOptions?
+---@param ... string
+---@return number
+---@return string
+---@return string
+local function exec(options, ...)
+    if type(options) ~= "table" then
+        options = {}
+    end
+    local bin = "systemctl"
+    local args = { ... }
+    local container = options.container
+    if type(container) == "string" and container ~= "root" then
+        if supportsContainerFlag then
+            table.insert(args, 1, "-M")
+            table.insert(args, 2, container .. "@")
+        elseif os.execute("sudo --version 2>&1 >/dev/null") == 0 then -- sudo is available
+            table.insert(args, 1, "-u")
+            table.insert(args, 2, container)
+            table.insert(args, 3, "systemctl")
+            bin = "sudo"
+        else
+            error("systemctl.user is not supported on this system - needs systemd 248+ or sudo") 
+        end
+    end
+
+    local _cmd = string.join_strings(" ", table.unpack(args))
     _trace("Executing systemctl " .. _cmd)
-    local _proc = proc.spawn("systemctl", { ... }, {stdio = { stdout = "pipe", stderr = "pipe" }, wait = true })
+    local _proc = proc.spawn(bin, args, {stdio = { stdout = "pipe", stderr = "pipe" }, wait = true })
     if not _proc then
         error("Failed to execute systemctl command: " .. _cmd)
     end
@@ -18,7 +77,12 @@ function _systemctl.exec(...)
     return _proc.exitcode, _stdout, _stderr
 end
 
-function _systemctl.install_service(sourceFile, serviceName, options)
+---installs a service
+---@param systemctlInstance Systemctl
+---@param sourceFile string
+---@param serviceName string
+---@param options SystemctlInstallServiceOptions?
+local function install_service(systemctlInstance, sourceFile, serviceName, options)
     if type(options) ~= "table" then
         options = {}
     end
@@ -29,29 +93,41 @@ function _systemctl.install_service(sourceFile, serviceName, options)
     assert(_ok, "Failed to install " .. serviceName .. "." ..options.kind .. " - " .. (_error or ""))
 
     if type(options.daemonReload) ~= "boolean" or options.daemonReload == true then
-        local _exitcode, _stdout, _stderr = _systemctl.exec("daemon-reload")
+        local _exitcode, _stdout, _stderr = systemctlInstance.exec(options, "daemon-reload")
         if _exitcode ~= 0 then
             _warn({ msg = "Failed to reload systemd daemon!", stdout = _stdout, stderr = _stderr })
         end
     end
-    assert(_systemctl.exec("enable", serviceName .. "." .. options.kind) == 0, "Failed to enable service " .. serviceName .. "!")
+    assert(systemctlInstance.exec(options, "enable", serviceName .. "." .. options.kind) == 0, "Failed to enable service " .. serviceName .. "!")
 end
 
-function _systemctl.start_service(serviceName)
+---starts a service
+---@param systemctlInstance Systemctl
+---@param serviceName string
+---@param options SystemctlExecOptions?
+local function start_service(systemctlInstance, serviceName, options)
     _trace("Starting service: " .. serviceName)
-    local _exitcode = _systemctl.exec("start", serviceName)
+    local _exitcode = systemctlInstance.exec(options, "start", serviceName)
     assert(_exitcode == 0, "Failed to start service")
     _trace("Service " .. serviceName .. "started...")
 end
 
-function _systemctl.stop_service(serviceName)
+---stops a service
+---@param systemctlInstance Systemctl
+---@param serviceName string
+---@param options SystemctlExecOptions?
+local function stop_service(systemctlInstance, serviceName, options)
     _trace("Stoping service: " .. serviceName)
-    local _exitcode = _systemctl.exec("stop", serviceName)
+    local _exitcode = systemctlInstance.exec(options, "stop", serviceName)
     assert(_exitcode == 0, "Failed to stop service")
     _trace("Service " .. serviceName .. "stopped...")
 end
 
-function _systemctl.remove_service(serviceName, options)
+---removes a service
+---@param systemctlInstance Systemctl
+---@param serviceName string
+---@param options SystemctlRemoveServiceOptions?
+local function remove_service(systemctlInstance, serviceName, options)
     if type(options) ~= "table" then 
         options = {}
     end
@@ -62,12 +138,12 @@ function _systemctl.remove_service(serviceName, options)
     if not fs.exists(_serviceUnitFile) then return end -- service not found so skip
 
     _trace("Removing service: " .. serviceName)
-    local _exitcode = _systemctl.exec("stop", serviceName)
+    local _exitcode = systemctlInstance.exec(options, "stop", serviceName)
     assert(_exitcode == 0 or _exitcode == 5, "Failed to stop service")
     _trace("Service " .. serviceName .. "stopped...")
 
 	_trace("Disabling service...")
-	assert(_systemctl.exec("disable", serviceName .. "." .. options.kind) == 0, "Failed to disable service " .. serviceName .. "!")
+	assert(systemctlInstance.exec(options, "disable", serviceName .. "." .. options.kind) == 0, "Failed to disable service " .. serviceName .. "!")
 	_trace("Service disabled.")
 
 	_trace("Removing service...")
@@ -77,7 +153,7 @@ function _systemctl.remove_service(serviceName, options)
     end
 
     if type(options.daemonReload) ~= "boolean" or options.daemonReload == true then
-        local _exitcode, _stdout, _stderr = _systemctl.exec("daemon-reload")
+        local _exitcode, _stdout, _stderr = systemctlInstance.exec(options, "daemon-reload")
         if _exitcode ~= 0 then
             _warn({ msg = "Failed to reload systemd daemon!", stdout = _stdout, stderr = _stderr })
         end
@@ -85,18 +161,24 @@ function _systemctl.remove_service(serviceName, options)
     _trace("Service " .. serviceName .. "removed...")
 end
 
-function _systemctl.get_service_status(serviceName)
+---gets service status
+---@param systemctlInstance Systemctl
+---@param serviceName string
+---@param options SystemctlExecOptions?
+---@return string
+---@return string
+local function get_service_status(systemctlInstance, serviceName, options)
     _trace("Getting service " .. serviceName .. "status...")
-    local _exitcode, _stdout = _systemctl.exec("show", "-p", "SubState", serviceName)
+    local _exitcode, _stdout = systemctlInstance.exec(options, "show", "-p", "SubState", serviceName)
     assert(_exitcode == 0, "Failed to get service status")
     local _status = _stdout:match("SubState=%s*(%S*)")
-    local _exitcode, _stdout = _systemctl.exec("show", "--timestamp=utc", "-p", "ExecMainStartTimestamp", serviceName)
+    local _exitcode, _stdout = systemctlInstance.exec(options, "show", "--timestamp=utc", "-p", "ExecMainStartTimestamp", serviceName)
     if _exitcode ~= 0 then -- fallback
-        _exitcode, _stdout = _systemctl.exec("show", "-p", "ExecMainStartTimestamp", serviceName)
+        _exitcode, _stdout = systemctlInstance.exec(options, "show", "-p", "ExecMainStartTimestamp", serviceName)
         assert(_exitcode == 0, "Failed to get service start timestamp")
         local _started = type(_stdout) == "string" and _stdout:match("^ExecMainStartTimestamp=%s*(.-)%s*$")
         -- adjust to UTC
-        local _proc = proc.spawn("date", { "-u",  "-d", tostring(_started), '+ExecMainStartTimestamp=%a %Y-%m-%d %H:%M:%S UTC' }, {stdio = { stdout = "pipe", stderr = "pipe" }, wait = true })
+        local _proc = proc.spawn(options, "date", { "-u",  "-d", tostring(_started), '+ExecMainStartTimestamp=%a %Y-%m-%d %H:%M:%S UTC' }, {stdio = { stdout = "pipe", stderr = "pipe" }, wait = true })
         if not _proc then
             error("Failed to execute date command")
         end
@@ -110,4 +192,66 @@ function _systemctl.get_service_status(serviceName)
     return _status, _started
 end
 
-return util.generate_safe_functions(_systemctl)
+---@type Systemctl
+---@diagnostic disable-next-line: missing-fields
+local systemctl = {}
+function systemctl.exec(...)
+    return exec(...)
+end
+
+function systemctl.install_service(...)
+    return install_service(systemctl, ...)
+end
+
+function systemctl.start_service(...)
+    return start_service(systemctl, ...)
+end
+
+function systemctl.stop_service(...)
+    return stop_service(systemctl, ...)
+end
+
+function systemctl.remove_service(...)
+    return remove_service(systemctl, ...)
+end
+
+function systemctl.get_service_status(...)
+    return get_service_status(systemctl, ...)
+end
+
+---creates a systemctl object with options preset
+---@param options SystemctlExecOptions
+---@return table
+function systemctl.with_options(cachedOptions)
+    ---@type Systemctl
+    ---@diagnostic disable-next-line: missing-fields
+    local systemctlWithOptions = {}
+    function systemctlWithOptions.exec(options, ...)
+        options = util.merge_tables(cachedOptions, options, true)
+        return exec(options, ...)
+    end
+
+    function systemctlWithOptions.install_service(...)
+        return install_service(systemctlWithOptions, ...)
+    end
+
+    function systemctlWithOptions.start_service(...)
+        return start_service(systemctlWithOptions, ...)
+    end
+
+    function systemctlWithOptions.stop_service(...)
+        return stop_service(systemctlWithOptions, ...)
+    end
+
+    function systemctlWithOptions.remove_service(...)
+        return remove_service(systemctlWithOptions, ...)
+    end
+
+    function systemctlWithOptions.get_service_status(...)
+        return get_service_status(systemctlWithOptions, ...)
+    end
+
+    return util.generate_safe_functions(systemctlWithOptions)
+end
+
+return util.generate_safe_functions(systemctl)
