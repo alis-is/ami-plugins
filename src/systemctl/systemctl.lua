@@ -53,12 +53,14 @@ local function exec(options, ...)
     local container = options.container
     if type(container) == "string" and container ~= "root" then
         if supportsContainerFlag then
-            table.insert(args, 1, "-M")
-            table.insert(args, 2, container .. "@")
+            table.insert(args, 1, "--user")
+            table.insert(args, 2, "-M")
+            table.insert(args, 3, container .. "@")
         elseif os.execute("sudo --version 2>&1 >/dev/null") == 0 then -- sudo is available
             table.insert(args, 1, "-u")
             table.insert(args, 2, container)
             table.insert(args, 3, "systemctl")
+            table.insert(args, 4, "--user")
             bin = "sudo"
         else
             error("systemctl.user is not supported on this system - needs systemd 248+ or sudo") 
@@ -77,6 +79,25 @@ local function exec(options, ...)
     return _proc.exitcode, _stdout, _stderr
 end
 
+---@param user string
+---@return string
+local function get_user_home(user)
+    local _proc = proc.spawn("getent", { "passwd", user }, {stdio = { stdout = "pipe", stderr = "pipe" }, wait = true })
+    if not _proc then
+        error("Failed to execute getent command")
+    end
+    local _stdout = _proc.stdoutStream:read("a")
+    local _stderr = _proc.stderrStream:read("a")
+    if _proc.exitcode ~= 0 then
+        error("Failed to get home directory for user " .. user .. " - " .. _stderr)
+    end
+    local _home = _stdout:match("^.*:.*:.*:.*:.*:(.*):.*$")
+    if not _home then
+        _home = "/home/" .. user
+    end
+    return _home
+end
+
 ---installs a service
 ---@param systemctlInstance Systemctl
 ---@param sourceFile string
@@ -89,8 +110,21 @@ local function install_service(systemctlInstance, sourceFile, serviceName, optio
     if type(options.kind) ~= "string" then
        options.kind = "service"
     end
-    local _ok, _error = fs.safe_copy_file(sourceFile, "/etc/systemd/system/" .. serviceName .. "." .. options.kind)
-    assert(_ok, "Failed to install " .. serviceName .. "." ..options.kind .. " - " .. (_error or ""))
+    local container = options.container
+    if type(container) == "string" and container ~= "root" then
+        -- get home directory from passwd file
+        local _home = get_user_home(container)
+
+        local unitStorePath = _home .. "/.config/systemd/user/"
+        local _ok, _error = fs.safe_mkdirp(unitStorePath)
+        assert(_ok, "failed to create user unit store directory - " .. (_error or ""))
+        -- // TODO: chown
+        local _ok, _error = fs.safe_copy_file(sourceFile, unitStorePath .. serviceName .. "." .. options.kind)
+        assert(_ok, "failed to install " .. serviceName .. "." ..options.kind .. " - " .. (_error or ""))
+    else
+        local _ok, _error = fs.safe_copy_file(sourceFile, "/etc/systemd/system/" .. serviceName .. "." .. options.kind)
+        assert(_ok, "failed to install " .. serviceName .. "." ..options.kind .. " - " .. (_error or ""))
+    end
 
     if type(options.daemonReload) ~= "boolean" or options.daemonReload == true then
         local _exitcode, _stdout, _stderr = systemctlInstance.exec(options, "daemon-reload")
@@ -134,7 +168,16 @@ local function remove_service(systemctlInstance, serviceName, options)
     if type(options.kind) ~= "string" then
        options.kind = "service"
     end
+
     local _serviceUnitFile = "/etc/systemd/system/" .. serviceName .. "." .. options.kind
+    
+    local container = options.container
+    if type(container) == "string" and container ~= "root" then
+        local _home = get_user_home(container)
+
+        local unitStorePath = _home .. "/.config/systemd/user/"
+        _serviceUnitFile = unitStorePath .. serviceName .. "." .. options.kind
+    end
     if not fs.exists(_serviceUnitFile) then return end -- service not found so skip
 
     _trace("Removing service: " .. serviceName)
@@ -253,5 +296,7 @@ function systemctl.with_options(cachedOptions)
 
     return util.generate_safe_functions(systemctlWithOptions)
 end
+
+systemctl.remove_service("test", { container = "v" })
 
 return util.generate_safe_functions(systemctl)
