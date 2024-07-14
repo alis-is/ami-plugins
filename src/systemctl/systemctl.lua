@@ -89,7 +89,7 @@ local function get_user_home(user)
     local _stdout = _proc.stdoutStream:read("a")
     local _stderr = _proc.stderrStream:read("a")
     if _proc.exitcode ~= 0 then
-        error("Failed to get home directory for user " .. user .. " - " .. _stderr)
+        error("failed to get home directory for user " .. user .. " - " .. _stderr)
     end
     local _home = _stdout:match("^.*:.*:.*:.*:.*:(.*):.*$")
     if not _home then
@@ -296,7 +296,5 @@ function systemctl.with_options(cachedOptions)
 
     return util.generate_safe_functions(systemctlWithOptions)
 end
-
-systemctl.remove_service("test", { container = "v" })
 
 return util.generate_safe_functions(systemctl)
