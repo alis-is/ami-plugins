@@ -117,13 +117,18 @@ function systemctl.install_service(sourceFile, serviceName, options)
     if type(container) == "string" and container ~= "root" then
         -- get home directory from passwd file
         local _home = get_user_home(container)
+        local _ok, _uid = fs.safe_getuid(container)
+        ami_assert(_ok, "Failed to get " .. container .. "uid - " .. (_uid or ""))
 
-        local unitStorePath = _home .. "/.config/systemd/user/"
+        local unitStorePath = _home .. "/.config/systemd/user/default.target.wants"
         local _ok, _error = fs.safe_mkdirp(unitStorePath)
         assert(_ok, "failed to create user unit store directory - " .. (_error or ""))
-        -- // TODO: chown
+        
         local _ok, _error = fs.safe_copy_file(sourceFile, unitStorePath .. serviceName .. "." .. options.kind)
         assert(_ok, "failed to install " .. serviceName .. "." ..options.kind .. " - " .. (_error or ""))
+
+        local _ok, _error = fs.chown(unitStorePath, _uid, _uid, { recurse = true })
+        ami_assert(_ok, "Failed to chown reports - " .. (_error or ""))
     else
         local _ok, _error = fs.safe_copy_file(sourceFile, "/etc/systemd/system/" .. serviceName .. "." .. options.kind)
         assert(_ok, "failed to install " .. serviceName .. "." ..options.kind .. " - " .. (_error or ""))
