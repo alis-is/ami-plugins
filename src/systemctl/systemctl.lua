@@ -237,28 +237,36 @@ end
 ---@param options SystemctlExecOptions
 ---@return table
 function systemctl.with_options(cachedOptions)
+    local function patch_options(options)
+        return util.merge_tables(cachedOptions, options, true)
+    end
+
     ---@type Systemctl
     ---@diagnostic disable-next-line: missing-fields
     local systemctlWithOptions = {}
     function systemctlWithOptions.exec(options, ...)
-        options = util.merge_tables(cachedOptions, options, true)
-        return systemctl.exec(options, ...)
+        return systemctl.exec(patch_options(options), ...)
     end
 
-    local function wrap_with_options_patch(func)
-        return function(...)
-            local args = { ... }
-            args[#args] = util.merge_tables(cachedOptions, args[#args], true)
-
-            return func(table.unpack(args))
-        end
+    function systemctlWithOptions.install_service(sourceFile, serviceName, options)
+        return systemctl.install_service(sourceFile, serviceName, patch_options(options))
     end
 
-    systemctlWithOptions.install_service = wrap_with_options_patch(systemctl.install_service)
-    systemctlWithOptions.start_service = wrap_with_options_patch(systemctl.start_service)
-    systemctlWithOptions.stop_service = wrap_with_options_patch(systemctl.stop_service)
-    systemctlWithOptions.remove_service = wrap_with_options_patch(systemctl.remove_service)
-    systemctlWithOptions.get_service_status = wrap_with_options_patch(systemctl.get_service_status)
+    function systemctlWithOptions.start_service(serviceName, options)
+        return systemctl.start_service(serviceName, patch_options(options))
+    end
+
+    function systemctlWithOptions.stop_service(serviceName, options)
+        return systemctl.stop_service(serviceName, patch_options(options))
+    end
+
+    function systemctlWithOptions.remove_service(serviceName, options)
+        return systemctl.remove_service(serviceName, patch_options(options))
+    end
+
+    function systemctlWithOptions.get_service_status(serviceName, options)
+        return systemctl.get_service_status(serviceName, patch_options(options))
+    end
 
     return util.generate_safe_functions(systemctlWithOptions)
 end
