@@ -120,8 +120,8 @@ function systemctl.install_service(sourceFile, serviceName, options)
         local _ok, _uid = fs.safe_getuid(container)
         ami_assert(_ok, "Failed to get " .. container .. "uid - " .. (_uid or ""))
 
-        local unitStorePath = _home .. "/.config/systemd/user/default.target.wants"
-        local _ok, _error = fs.safe_mkdirp(unitStorePath)
+        local unitStorePath = _home .. "/.config/systemd/user/"
+        local _ok, _error = fs.safe_mkdirp(unitStorePath .. "default.target.wants") -- create everything up to default.target.wants
         assert(_ok, "failed to create user unit store directory - " .. (_error or ""))
         
         local _ok, _error = fs.safe_copy_file(sourceFile, unitStorePath .. serviceName .. "." .. options.kind)
