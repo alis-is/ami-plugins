@@ -224,7 +224,7 @@ function systemctl.get_service_status(serviceName, options)
         assert(_exitcode == 0, "Failed to get service start timestamp")
         local _started = type(_stdout) == "string" and _stdout:match("^ExecMainStartTimestamp=%s*(.-)%s*$")
         -- adjust to UTC
-        local _proc = proc.spawn(options, "date", { "-u",  "-d", tostring(_started), '+ExecMainStartTimestamp=%a %Y-%m-%d %H:%M:%S UTC' }, {stdio = { stdout = "pipe", stderr = "pipe" }, wait = true })
+        local _proc = proc.spawn("date", { "-u",  "-d", tostring(_started), '+ExecMainStartTimestamp=%a %Y-%m-%d %H:%M:%S UTC' }, {stdio = { stdout = "pipe", stderr = "pipe" }, wait = true })
         if not _proc then
             error("Failed to execute date command")
         end
@@ -239,7 +239,7 @@ function systemctl.get_service_status(serviceName, options)
 end
 
 ---creates a systemctl object with options preset
----@param options SystemctlExecOptions
+---@param cachedOptions SystemctlExecOptions
 ---@return table
 function systemctl.with_options(cachedOptions)
     local function patch_options(options)
