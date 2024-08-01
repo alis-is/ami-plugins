@@ -60,7 +60,7 @@ function systemctl.exec(options, ...)
             table.insert(args, 1, "--user")
             table.insert(args, 2, "-M")
             table.insert(args, 3, container .. "@")
-        elseif os.execute("sudo --version 2>&1 >/dev/null") == 0 then -- sudo is available
+        elseif os.execute("which sudo 2>&1 >/dev/null") == 0 then -- sudo is available
             table.insert(args, 1, "-u")
             table.insert(args, 2, container)
             table.insert(args, 3, "systemctl")
