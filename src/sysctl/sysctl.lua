@@ -33,7 +33,7 @@ function sysctl.get(variable)
 	local err_msg = "Failed to get value of " .. tostring(variable) .. "!"
 	local process_info = proc.exec("sysctl " .. variable, {stdout = "pipe", stderr = "pipe"})
 	if (process_info.exit_code ~= 0) then 
-		log_error(err_msg .. "\nStderr: " .. tostring(process_info.stderr_stream:read("a")))
+		log_error(err_msg .. "\nstderr: " .. tostring(process_info.stderr_stream:read("a")))
 	end
 	local output = process_info.stdout_stream:read("a")
 	local result = tostring(output):match(variable .. " = (%S*)")

@@ -35,16 +35,16 @@ function user.add(user_name, options)
 
     if type(options) ~= 'table' then
         options = {
-            disableLogin = false,
-            disablePassword = false,
+            disable_login = false,
+            disable_password = false,
             gecos = ''
         }
     end
     local cmd = 'adduser '
-    if options.disableLogin then
+    if options.disable_login then
         cmd = cmd .. '--disabled-login '
     end
-    if options.disablePassword then
+    if options.disable_password then
         cmd = cmd .. '--disabled-password '
     end
     if options.gecos then

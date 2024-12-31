@@ -1,19 +1,19 @@
 local values, generate_safe_functions = util.values, util.generate_safe_functions
 local is_tty = require "is_tty".is_stdout_tty()
 
-local _trace, _debug = util.global_log_factory("plugin/apt", "trace", "debug")
+local log_trace, log_debug = util.global_log_factory("plugin/apt", "trace", "debug")
 
 local function get_apt_binary()
     local os = require "os"
-    _trace "Looking for apt binary"
+    log_trace "Looking for apt binary"
     if os.execute("apt -v 2>&1 >/dev/null") then
-        _debug "'apt' available."
+        log_debug "'apt' available."
         return "apt"
     elseif os.execute("apt-get -v 2>&1 >/dev/null") then
-        _debug "'apt-get' available."
+        log_debug "'apt-get' available."
         return "apt-get"
     else
-        _debug "No APT binary found."
+        log_debug "No APT binary found."
         return nil
     end
 end
@@ -22,12 +22,12 @@ local function colorize_error_msg(msg)
     if type(msg) ~= "string" then
         return msg
     end
-    local _end = ""
+    local msg_end = ""
     if msg:sub(#msg, #msg) == "\n" then
         msg = msg:sub(1, #msg - 1)
-        _end = "\n"
+        msg_end = "\n"
     end
-    return string.char(27) .. "[31m" .. msg .. string.char(27) .. "[0m" .. _end
+    return string.char(27) .. "[31m" .. msg .. string.char(27) .. "[0m" .. msg_end
 end
 
 local APT = get_apt_binary()
@@ -35,16 +35,16 @@ assert(APT, "No supported 'apt' binary found")
 assert(proc.EPROC, "APT plugin requires posix proc extra api (eli.proc.extra)")
 assert(env.EENV, "APT plugin requires posix env extra api (eli.env.extra)")
 
-local function _execute(cmd, args, options)
+local function execute(cmd, args, options)
     if type(options) ~= "table" then
         options = {}
     end
-    _trace {msg = "Spawning " .. cmd, args = args, env = options.env, cmd = cmd}
+    log_trace {msg = "Spawning " .. cmd, args = args, env = options.env, cmd = cmd}
 
     local proc, err = proc.spawn(cmd,  args, { stdio = { stdout = "pipe", stderr = "pipe" }, env = options.env})
 
     if not proc then
-        _debug {msg = "Failed to start " .. cmd, error = err}
+        log_debug {msg = "Failed to start " .. cmd, error = err}
         return false, -1, err, err
     end
 
@@ -91,14 +91,14 @@ local function _execute(cmd, args, options)
         stderr = stderr .. stderr_stream:read("a")
     end
     local exit_code = proc:get_exit_code()
-    _trace {msg = cmd .. " exited", exit_code = exit_code, stdout = stdout, stderr = stderr}
+    log_trace {msg = cmd .. " exited", exit_code = exit_code, stdout = stdout, stderr = stderr}
     return exit_code == 0, exit_code, stdout, stderr
 end
 
-local function _is_installed(dependency)
-    local success, exit_code = _execute("dpkg", {"-l", dependency})
+local function is_installed(dependency)
+    local success, exit_code = execute("dpkg", {"-l", dependency})
     if not success or exit_code ~= 0 then return false end
-    local success, exit_code, stdout = _execute("apt", {"-qq", "list", dependency})
+    local success, exit_code, stdout = execute("apt", {"-qq", "list", dependency})
     if not success or exit_code ~= 0 then -- apt may not be available we rely on dpkg only
         return true
     end
@@ -106,7 +106,7 @@ local function _is_installed(dependency)
 end
 
 local function install(dependencies, options)
-    _debug {msg = "Installing dependencies...", dependencies = dependencies}
+    log_debug {msg = "Installing dependencies...", dependencies = dependencies}
     if type(dependencies) == "table" then
         dependencies = values(dependencies)
     elseif type(dependencies) == "string" then
@@ -114,10 +114,10 @@ local function install(dependencies, options)
     end
 
     for i, dependency in ipairs(dependencies) do
-        if not _is_installed(dependency) then
-            local success, exit_code, stdout, stderr = _execute(APT, {"install", "-y", dependency}, options)
+        if not is_installed(dependency) then
+            local success, exit_code, stdout, stderr = execute(APT, {"install", "-y", dependency}, options)
             if not success then
-                _debug {
+                log_debug {
                     msg = "Failed to install dependency - " .. dependency .. ". APT stopped...",
                     dependency = dependency,
                     dependencies = dependencies
@@ -126,7 +126,7 @@ local function install(dependencies, options)
             end
         end
     end
-    _debug {msg = "Dependencies successfuly installed.", dependencies = dependencies}
+    log_debug {msg = "Dependencies successfuly installed.", dependencies = dependencies}
     return true
 end
 
@@ -141,7 +141,7 @@ local function install_non_interactive(dependencies, options)
 end
 
 local function upgrade(options)
-    local success, exit_code, stdout, stderr = _execute(APT, {"upgrade", "-y"}, options)
+    local success, exit_code, stdout, stderr = execute(APT, {"upgrade", "-y"}, options)
     return success, exit_code, stdout, stderr
 end
 
@@ -156,17 +156,17 @@ local function upgrade_non_interactive(options)
 end
 
 local function update(options)
-    local success, exit_code, stdout, stderr = _execute(APT, {"update"}, options)
+    local success, exit_code, stdout, stderr = execute(APT, {"update"}, options)
     return success, exit_code, stdout, stderr
 end
 
 local function autoremove(options)
-    local success, exit_code, stdout, stderr = _execute(APT, {"autoremove"}, options)
+    local success, exit_code, stdout, stderr = execute(APT, {"autoremove"}, options)
     return success, exit_code, stdout, stderr
 end
 
 local function clean(options)
-    local success, exit_code, stdout, stderr = _execute(APT, {"clean"}, options)
+    local success, exit_code, stdout, stderr = execute(APT, {"clean"}, options)
     return success, exit_code, stdout, stderr
 end
 

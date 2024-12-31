@@ -23,11 +23,11 @@ local supports_container_flag = get_systemd_version() >= 249
 
 ---@class SystemctlInstallServiceOptions: SystemctlExecOptions
 ---@field kind string?
----@field daemonReload boolean?
+---@field daemon_reload boolean?
 
 ---@class SystemctlRemoveServiceOptions: SystemctlExecOptions
 ---@field kind string?
----@field daemonReload boolean?
+---@field daemon_reload boolean?
 
 ---@class Systemctl
 ---@field exec fun(options: SystemctlExecOptions?, ...: string): number, string, string
@@ -135,7 +135,7 @@ function systemctl.install_service(source_file, service_name, options)
         assert(ok, "failed to install " .. service_name .. "." .. options.kind .. " - " .. (err or ""))
     end
 
-    if type(options.daemonReload) ~= "boolean" or options.daemonReload == true then
+    if type(options.daemon_reload) ~= "boolean" or options.daemon_reload == true then
         local exit_code, stdout, stderr = systemctl.exec(options, "daemon-reload")
         if exit_code ~= 0 then
             log_warn({ msg = "Failed to reload systemd daemon!", stdout = stdout, stderr = stderr })
@@ -177,8 +177,8 @@ function systemctl.is_service_installed(service_name, options)
     end
     local container = options.container
     if type(container) == "string" and container ~= "root" then
-        local _home = get_user_home(container)
-        local unit_store_path = _home .. "/.config/systemd/user/"
+        local home_dir = get_user_home(container)
+        local unit_store_path = home_dir .. "/.config/systemd/user/"
         return fs.exists(unit_store_path .. service_name .. "." .. options.kind)
     end
     return fs.exists("/etc/systemd/system/" .. service_name .. "." .. options.kind)
@@ -198,9 +198,9 @@ function systemctl.remove_service(service_name, options)
     local service_unit_file = "/etc/systemd/system/" .. service_name .. "." .. options.kind
     local container = options.container
     if type(container) == "string" and container ~= "root" then
-        local _home = get_user_home(container)
+        local home_dir = get_user_home(container)
 
-        local unit_store_path = _home .. "/.config/systemd/user/"
+        local unit_store_path = home_dir .. "/.config/systemd/user/"
         service_unit_file = unit_store_path .. service_name .. "." .. options.kind
     end
     if not fs.exists(service_unit_file) then return end -- service not found so skip
@@ -216,15 +216,15 @@ function systemctl.remove_service(service_name, options)
     log_trace("Service disabled.")
 
     log_trace("Removing service...")
-    local _ok, _error = fs.safe_remove(service_unit_file)
-    if not _ok then
-        error("Failed to remove " .. service_name .. "." .. options.kind .. " - " .. (_error or ""))
+    local ok, err = fs.safe_remove(service_unit_file)
+    if not ok then
+        error("Failed to remove " .. service_name .. "." .. options.kind .. " - " .. (err or ""))
     end
 
-    if type(options.daemonReload) ~= "boolean" or options.daemonReload == true then
-        local exit_code, _stdout, _stderr = systemctl.exec(options, "daemon-reload")
+    if type(options.daemon_reload) ~= "boolean" or options.daemon_reload == true then
+        local exit_code, stdout, stderr = systemctl.exec(options, "daemon-reload")
         if exit_code ~= 0 then
-            log_warn({ msg = "Failed to reload systemd daemon!", stdout = _stdout, stderr = _stderr })
+            log_warn({ msg = "Failed to reload systemd daemon!", stdout = stdout, stderr = stderr })
         end
     end
     log_trace("Service " .. service_name .. "removed...")
@@ -237,30 +237,30 @@ end
 ---@return string
 function systemctl.get_service_status(service_name, options)
     log_trace("Getting service " .. service_name .. "status...")
-    local exit_code, _stdout = systemctl.exec(options, "show", "-p", "SubState", service_name)
+    local exit_code, stdout = systemctl.exec(options, "show", "-p", "SubState", service_name)
     assert(exit_code == 0, "Failed to get service status")
-    local _status = _stdout:match("SubState=%s*(%S*)")
-    local exit_code, _stdout = systemctl.exec(options, "show", "--timestamp=utc", "-p", "ExecMainStartTimestamp",
+    local status = stdout:match("SubState=%s*(%S*)")
+    local exit_code, stdout = systemctl.exec(options, "show", "--timestamp=utc", "-p", "ExecMainStartTimestamp",
         service_name)
     if exit_code ~= 0 then -- fallback
-        exit_code, _stdout = systemctl.exec(options, "show", "-p", "ExecMainStartTimestamp", service_name)
+        exit_code, stdout = systemctl.exec(options, "show", "-p", "ExecMainStartTimestamp", service_name)
         assert(exit_code == 0, "Failed to get service start timestamp")
-        local _started = type(_stdout) == "string" and _stdout:match("^ExecMainStartTimestamp=%s*(.-)%s*$")
+        local started = type(stdout) == "string" and stdout:match("^ExecMainStartTimestamp=%s*(.-)%s*$")
         -- adjust to UTC
-        local _proc = proc.spawn("date",
-            { "-u", "-d", tostring(_started), '+ExecMainStartTimestamp=%a %Y-%m-%d %H:%M:%S UTC' },
+        local process = proc.spawn("date",
+            { "-u", "-d", tostring(started), '+ExecMainStartTimestamp=%a %Y-%m-%d %H:%M:%S UTC' },
             { stdio = { stdout = "pipe", stderr = "pipe" }, wait = true })
-        if not _proc then
+        if not process then
             error("Failed to execute date command")
         end
-        log_trace("date exit code: " .. _proc.exit_code)
-        _stdout = _proc.stdout_stream:read("a")
-        exit_code = _proc.exit_code
+        log_trace("date exit code: " .. process.exit_code)
+        stdout = process.stdout_stream:read("a")
+        exit_code = process.exit_code
     end
     assert(exit_code == 0, "Failed to get service start timestamp")
-    local _started = type(_stdout) == "string" and _stdout:match("^ExecMainStartTimestamp=%s*(.-)%s*$")
-    log_trace("Got service " .. service_name .. " status - " .. (_status or ""))
-    return _status, _started
+    local started = type(stdout) == "string" and stdout:match("^ExecMainStartTimestamp=%s*(.-)%s*$")
+    log_trace("Got service " .. service_name .. " status - " .. (status or ""))
+    return status, started
 end
 
 ---creates a systemctl object with options preset

@@ -38,7 +38,7 @@ local distro_setup_fns = {
         assert(ok, "Failed to apt update!")
         apt.install("podman slirp4netns")
     end
-    --    ["debian"] = function(platformInfo)
+    --    ["debian"] = function(platform_info)
     --  // TODO
     --    end
 }
@@ -133,15 +133,15 @@ function podman.raw_exec(method, options)
         options.stderr = "pipe"
     end
     local cmd = "podman " .. method .. " " .. options.args .. " " .. (options.container or "").. " " .. (options.command or "")
-    if options.useOsExec == true then
+    if options.use_os_exec == true then
        return os_execute(cmd, options)
-    end    
+    end
 
     if type(options.runas) == "string" then
         cmd = "su -l " .. options.runas .. " -c 'cd \"" .. escape(os.cwd()) .."\" && " .. escape(cmd) .. "'"
     end
     trace("Executing: " .. cmd)
-    if options.stdPassthrough then 
+    if options.std_passthrough then
        options.stdout = "ignore"
        options.stderr = "ignore"
     end
