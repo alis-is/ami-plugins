@@ -55,49 +55,51 @@ local function _execute(cmd, args, options)
         stdout = proc:get_stdout():read "a"
         stderr = proc:get_stderr():read "a"
     else
-        local _stdoutStream = proc:get_stdout()
-        local _stderrStream = proc:get_stderr()
-        _stdoutStream:set_nonblocking(true)
-        _stderrStream:set_nonblocking(true)
+        local stdout_stream = proc:get_stdout()
+        local stderr_stream = proc:get_stderr()
+        if not stdout_stream then return false, -1, "Failed to get stdout stream" end
+        stdout_stream:set_nonblocking(true)
+        if not stderr_stream then return false, -1, "Failed to get stderr stream" end
+        stderr_stream:set_nonblocking(true)
         while not proc:exited() do
-            local noOutput
+            local no_output
             if type(options.stdout_cb) == "function" then
                 repeat
-                    local tmp = _stdoutStream:read("L")
+                    local tmp = stdout_stream:read("L")
                     stdout = stdout .. (tmp or "")
                     options.stdout_cb(tmp)
-                    noOutput = tmp == ""
-                until (noOutput)
+                    no_output = tmp == ""
+                until (no_output)
             end
 
             if type(options.stderr_cb) == "function" then
                 repeat
-                    local tmp = _stderrStream:read("L")
+                    local tmp = stderr_stream:read("L")
                     stderr = stderr .. (tmp or "")
-                    noOutput = tmp == ""
+                    no_output = tmp == ""
                     if options.colorful or (options.colorful == nil and is_tty) then
                         tmp = colorize_error_msg(tmp)
                     end
                     options.stderr_cb(tmp)
-                until (noOutput)
+                until (no_output)
             end
             os.sleep(1)
         end
 
         proc:wait()
-        stdout = stdout .. _stdoutStream:read("a")
-        stderr = stderr .. _stderrStream:read("a")
+        stdout = stdout .. stdout_stream:read("a")
+        stderr = stderr .. stderr_stream:read("a")
     end
-    local exitCode = proc:get_exitcode()
-    _trace {msg = cmd .. " exited", exitcode = exitCode, stdout = stdout, stderr = stderr}
-    return exitCode == 0, exitCode, stdout, stderr
+    local exit_code = proc:get_exit_code()
+    _trace {msg = cmd .. " exited", exit_code = exit_code, stdout = stdout, stderr = stderr}
+    return exit_code == 0, exit_code, stdout, stderr
 end
 
 local function _is_installed(dependency)
-    local success, exitcode = _execute("dpkg", {"-l", dependency})
-    if not success or exitcode ~= 0 then return false end
-    local success, exitcode, stdout = _execute("apt", {"-qq", "list", dependency})
-    if not success or exitcode ~= 0 then -- apt may not be available we rely on dpkg only
+    local success, exit_code = _execute("dpkg", {"-l", dependency})
+    if not success or exit_code ~= 0 then return false end
+    local success, exit_code, stdout = _execute("apt", {"-qq", "list", dependency})
+    if not success or exit_code ~= 0 then -- apt may not be available we rely on dpkg only
         return true
     end
     return stdout:match("installed")
@@ -113,14 +115,14 @@ local function install(dependencies, options)
 
     for i, dependency in ipairs(dependencies) do
         if not _is_installed(dependency) then
-            local success, exitcode, stdout, stderr = _execute(APT, {"install", "-y", dependency}, options)
+            local success, exit_code, stdout, stderr = _execute(APT, {"install", "-y", dependency}, options)
             if not success then
                 _debug {
                     msg = "Failed to install dependency - " .. dependency .. ". APT stopped...",
                     dependency = dependency,
                     dependencies = dependencies
                 }
-                return false, exitcode, stdout, stderr, dependency
+                return false, exit_code, stdout, stderr, dependency
             end
         end
     end
@@ -139,8 +141,8 @@ local function install_non_interactive(dependencies, options)
 end
 
 local function upgrade(options)
-    local success, exitcode, stdout, stderr = _execute(APT, {"upgrade", "-y"}, options)
-    return success, exitcode, stdout, stderr
+    local success, exit_code, stdout, stderr = _execute(APT, {"upgrade", "-y"}, options)
+    return success, exit_code, stdout, stderr
 end
 
 local function upgrade_non_interactive(options)
@@ -154,18 +156,18 @@ local function upgrade_non_interactive(options)
 end
 
 local function update(options)
-    local success, exitcode, stdout, stderr = _execute(APT, {"update"}, options)
-    return success, exitcode, stdout, stderr
+    local success, exit_code, stdout, stderr = _execute(APT, {"update"}, options)
+    return success, exit_code, stdout, stderr
 end
 
 local function autoremove(options)
-    local success, exitcode, stdout, stderr = _execute(APT, {"autoremove"}, options)
-    return success, exitcode, stdout, stderr
+    local success, exit_code, stdout, stderr = _execute(APT, {"autoremove"}, options)
+    return success, exit_code, stdout, stderr
 end
 
 local function clean(options)
-    local success, exitcode, stdout, stderr = _execute(APT, {"clean"}, options)
-    return success, exitcode, stdout, stderr
+    local success, exit_code, stdout, stderr = _execute(APT, {"clean"}, options)
+    return success, exit_code, stdout, stderr
 end
 
 return generate_safe_functions(

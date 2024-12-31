@@ -75,24 +75,24 @@ end
 
 -- returns distro, version, { additional info }
 local function get_dist()
-    local _dist = ""
+    local dist = ""
     local _ver = ""
 
-    local _file = io.open("/etc/lsb-release")
-    if _file then
-        local _ok, _lsb = pcall(_file.read, _file, "a")
-        if _ok then
-            _dist = _lsb:match("DISTRIB_ID=(%w*)")
-            _ver = _lsb:match("DISTRIB_RELEASE=([%w%p]*)")
-            local _codename = _lsb:match("DISTRIB_CODENAME=(%w*)")
-            return _dist, _ver, {CODENAME = _codename}
+    local file = io.open("/etc/lsb-release")
+    if file then
+        local ok, lsb = pcall(file.read, file, "a")
+        if ok then
+            dist = lsb:match("DISTRIB_ID=(%w*)")
+            _ver = lsb:match("DISTRIB_RELEASE=([%w%p]*)")
+            local codename = lsb:match("DISTRIB_CODENAME=(%w*)")
+            return dist, _ver, {CODENAME = codename}
         end
     end
 
-    local _releaseFilePath = "/etc/os-release"
+    local release_file_path = "/etc/os-release"
     local _ok, _fs = pcall(require, "eli.fs")
     if _ok and _fs.EFS then -- only if fs available
-        local files = _fs.read_dir("/etc", {returnFullPaths = true})
+        local files = _fs.read_dir("/etc", {return_full_paths = true})
         for _, _path in ipairs(files) do
             local _id = _path:match(".*/%w+[-_](.*)")
             if _id == "release" or _id == "version" then
@@ -104,37 +104,37 @@ local function get_dist()
                     end
                 end
                 if _matched then
-                    _dist = _matched
-                    _releaseFilePath = _path
+                    dist = _matched
+                    release_file_path = _path
                     break
                 end
             end
         end
     end
 
-    if type(_releaseFilePath) == "string" then
-        local _file = io.open(_releaseFilePath)
-        if _file then
-            local _firstline = _file:read("l")
-            _file:seek("set", 0)
+    if type(release_file_path) == "string" then
+        local file = io.open(release_file_path)
+        if file then
+            local _firstline = file:read("l")
+            file:seek("set", 0)
             while true do
-                local _line = _file:read("l")
+                local _line = file:read("l")
                 if _line == nil then
                     break
                 end
-                local _distCandidate = _line:match('^NAME="?([^"]+)"?$')
-                if _distCandidate then _dist = _distCandidate end
-                local _verCandidate = _line:match('^VERSION="?([^"]+)"?$')
-                if _verCandidate then _ver = _verCandidate end
+                local dist_candidate = _line:match('^NAME="?([^"]+)"?$')
+                if dist_candidate then dist = dist_candidate end
+                local ver_candidate = _line:match('^VERSION="?([^"]+)"?$')
+                if ver_candidate then _ver = ver_candidate end
             end
-            if _dist ~= "" then
-                return _dist, _ver, {}
+            if dist ~= "" then
+                return dist, _ver, {}
             end
             return _parse_release_file(_firstline)
         end
     end
 
-    return _dist, _ver, {}
+    return dist, _ver, {}
 end
 
 local function _get_platform()
@@ -142,8 +142,8 @@ local function _get_platform()
     if _delim == "\\" then
         -- windows
         _debug {msg = "Assuming windows platform."}
-        local _success, _exit, _code, _output = _execute("systeminfo.exe")
-        _trace {msg = _output, type = "stdout", external_source = "systeminfo.exe", exitcode = _exit}
+        local _success, exit_code, _code, _output = _execute("systeminfo.exe")
+        _trace {msg = _output, type = "stdout", external_source = "systeminfo.exe", exit_code = exit_code}
         if not _success then
             _debug {msg = "Failed to get windows platform details."}
             return false
@@ -160,8 +160,8 @@ local function _get_platform()
     else
         -- unix or mac
         _debug {msg = "Assuming unix platform."}
-        local _success, _exit, _code, _output = _execute("uname -s")
-        _trace {msg = _output, type = "stdout", external_source = "uname -s", exitcode = _exit}
+        local _success, exit_code, _code, _output = _execute("uname -s")
+        _trace {msg = _output, type = "stdout", external_source = "uname -s", exit_code = exit_code}
         if not _success then
             _debug {msg = "Failed to get unix platform details."}
             return false
@@ -176,24 +176,24 @@ local function _get_platform()
             _DISTRO = "MacOS"
         end
 
-        _success, _exit, _code, _output = _execute("uname -r")
-        _trace {msg = _output, type = "stdout", external_source = "uname -r", exitcode = _exit}
+        _success, exit_code, _code, _output = _execute("uname -r")
+        _trace {msg = _output, type = "stdout", external_source = "uname -r", exit_code = exit_code}
         if not _success then
             _debug {msg = "Failed to get unix platform details."}
             return false
         end
         local _KERNEL_VERSION = _success and _output:match("([^\n]*)") or ""
 
-        _success, _exit, _code, _output = _execute("uname -m")
-        _trace {msg = _output, type = "stdout", external_source = "uname -m", exitcode = _exit}
+        _success, exit_code, _code, _output = _execute("uname -m")
+        _trace {msg = _output, type = "stdout", external_source = "uname -m", exit_code = exit_code}
         local _SYSTEM_TYPE = _success and _output:match("([^\n]*)") or ""
 
-        _success, _exit, _code, _output = _execute("uname -i")
-        _trace {msg = _output, type = "stdout", external_source = "uname -i", exitcode = _exit}
+        _success, exit_code, _code, _output = _execute("uname -i")
+        _trace {msg = _output, type = "stdout", external_source = "uname -i", exit_code = exit_code}
         local _PLATFORM_TYPE = _success and _output:match("([^\n]*)") or ""
 
-        _success, _exit, _code, _output = _execute("uname -p")
-        _trace {msg = _output, type = "stdout", external_source = "uname -p", exitcode = _exit}
+        _success, exit_code, _code, _output = _execute("uname -p")
+        _trace {msg = _output, type = "stdout", external_source = "uname -p", exit_code = exit_code}
         local _PROCESSOR_TYPE = _success and _output:match("([^\n]*)") or ""
 
         local _details = {

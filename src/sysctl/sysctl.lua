@@ -1,49 +1,49 @@
-local _configFile = "/etc/sysctl.d/99-ami-sysctl.conf"
+local config_file = "/etc/sysctl.d/99-ami-sysctl.conf"
 
 local sysctl = {}
-local _trace, _debug, _error = util.global_log_factory("plugin/sysctl", "trace", "debug", "error")
+local log_trace, log_debug, log_error = util.global_log_factory("plugin/sysctl", "trace", "debug", "error")
 
 function sysctl.set(variable, value)
-	local _errMsg = "Failed to set " .. tostring(variable) .. " to " .. tostring(value) .. "!"
-	local _configFileContent = ""
-	if fs.exists(_configFileContent) then 
-		_configFileContent = fs.read_file(_configFile)
+	local err_msg = "Failed to set " .. tostring(variable) .. " to " .. tostring(value) .. "!"
+	local config_file_content = ""
+	if fs.exists(config_file_content) then 
+		config_file_content = fs.read_file(config_file)
 	end
-	local _value = _configFileContent:match(variable .. " = (%S*)")
-	if _configFileContent[#_configFileContent] ~= '\n' then 
-		_configFileContent = _configFileContent .. '\n'
+	local value = config_file_content:match(variable .. " = (%S*)")
+	if config_file_content[#config_file_content] ~= '\n' then 
+		config_file_content = config_file_content .. '\n'
 	end
 	if value == nil then 
-		_configFileContent = _configFileContent:gsub(variable .. " = (%S*)%s-\n", "")
-	elseif _value then 
-		_trace("Variable found rewriting...")
-		_configFileContent = _configFileContent:gsub(variable .. " = (%S*)", variable .. " = " .. value)
+		config_file_content = config_file_content:gsub(variable .. " = (%S*)%s-\n", "")
+	elseif value then 
+		log_trace("Variable found rewriting...")
+		config_file_content = config_file_content:gsub(variable .. " = (%S*)", variable .. " = " .. value)
 	else 
-		_trace("Variable not found. Adding new record.")
-		_configFileContent = _configFileContent .. variable .. " = " .. value .. "\n"
+		log_trace("Variable not found. Adding new record.")
+		config_file_content = config_file_content .. variable .. " = " .. value .. "\n"
 	end
-	local _tmpFile = os.tmpname()
-	fs.write_file(_tmpFile, _configFileContent)
-	fs.move(_tmpFile, _configFile)
-	assert(os.execute("sysctl -p " .. _configFile), _errMsg)
-	_debug("Sysctl variable " .. variable .. " set to " .. tostring(value));
+	local tmp_file_path = os.tmpname()
+	fs.write_file(tmp_file_path, config_file_content)
+	fs.move(tmp_file_path, config_file)
+	assert(os.execute("sysctl -p " .. config_file), err_msg)
+	log_debug("Sysctl variable " .. variable .. " set to " .. tostring(value));
 end
 
 function sysctl.get(variable)
-	local _errMsg = "Failed to get value of " .. tostring(variable) .. "!"
-	local _processInfo = proc.exec("sysctl " .. variable, {stdout = "pipe", stderr = "pipe"})
-	if (_processInfo.exitcode ~= 0) then 
-		_error(_errMsg .. "\nStderr: " .. tostring(_processInfo.stderrStream:read("a")))
+	local err_msg = "Failed to get value of " .. tostring(variable) .. "!"
+	local process_info = proc.exec("sysctl " .. variable, {stdout = "pipe", stderr = "pipe"})
+	if (process_info.exit_code ~= 0) then 
+		log_error(err_msg .. "\nStderr: " .. tostring(process_info.stderr_stream:read("a")))
 	end
-	local _output = _processInfo.stdoutStream:read("a")
-	local _result = tostring(_output):match(variable .. " = (%S*)")
-	return _result and _result:match'^%s*(.*%S)'
+	local output = process_info.stdout_stream:read("a")
+	local result = tostring(output):match(variable .. " = (%S*)")
+	return result and result:match'^%s*(.*%S)'
 end
 
 function sysctl.unset(variable)
-	local _errMsg = "Failed to unset " .. tostring(variable) .. "!"
+	local err_msg = "Failed to unset " .. tostring(variable) .. "!"
 	sysctl.set(variable)
-	assert(os.execute("sysctl -p"), _errMsg)
+	assert(os.execute("sysctl -p"), err_msg)
 end
 
 return util.generate_safe_functions(sysctl)

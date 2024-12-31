@@ -1,4 +1,4 @@
-local _debug, _warn = require 'eli.util'.global_log_factory('plugin/platform', 'debug', 'warn')
+local log_debug, log_warn = require 'eli.util'.global_log_factory('plugin/platform', 'debug', 'warn')
 
 local user = {}
 
@@ -6,30 +6,30 @@ function user.execute_cmd_as(cmd, user)
     return os.execute('su ' .. user .. ' -c ' .. cmd)
 end
 
-local function _lock_user()
-    local _lockFile = '/var/run/ami.plugin.user.lockfile'
-    if not fs.exists(_lockFile) then
-        fs.write_file(_lockFile, '')
+local function lock_user()
+    local lock_file = '/var/run/ami.plugin.user.lockfile'
+    if not fs.exists(lock_file) then
+        fs.write_file(lock_file, '')
     end
-    return fs.lock_file(_lockFile, 'w')
+    return fs.lock_file(lock_file, 'w')
 end
 
-local function _unlock_user(lock)
-    local _ok, _error = pcall(fs.unlock_file, lock)
-    if not _ok then _warn("Failed to unlock plugin.user.lockfile - " .. tostring(_error) .. "!") end
+local function unlock_user(lock)
+    local ok, err = pcall(fs.unlock_file, lock)
+    if not ok then log_warn("Failed to unlock plugin.user.lockfile - " .. tostring(err) .. "!") end
 end
 
-function user.add(userName, options)
-    local _lock
-    while _lock == nil do
-        _lock, _ = _lock_user()
-        _debug('Waiting for add user lock...')
+function user.add(user_name, options)
+    local lock
+    while lock == nil do
+        lock, _ = lock_user()
+        log_debug('Waiting for add user lock...')
         os.sleep(1)
     end
 
-    local _ok, _uid = user.get_uid(userName)
-    if _ok and type(_uid) == "number" then
-        _unlock_user(_lock)
+    local ok, uid = user.get_uid(user_name)
+    if ok and type(uid) == "number" then
+        unlock_user(lock)
         return true, "exit", 0
     end
 
@@ -40,34 +40,34 @@ function user.add(userName, options)
             gecos = ''
         }
     end
-    local _cmd = 'adduser '
+    local cmd = 'adduser '
     if options.disableLogin then
-        _cmd = _cmd .. '--disabled-login '
+        cmd = cmd .. '--disabled-login '
     end
     if options.disablePassword then
-        _cmd = _cmd .. '--disabled-password '
+        cmd = cmd .. '--disabled-password '
     end
     if options.gecos then
-        _cmd = _cmd .. '--gecos "' .. options.gecos .. '" '
+        cmd = cmd .. '--gecos "' .. options.gecos .. '" '
     end
 
-    _debug('Creating user: ' .. tostring(userName))
-    local _result = os.execute(_cmd .. userName)
-    _unlock_user(_lock)
-    return _result
+    log_debug('Creating user: ' .. tostring(user_name))
+    local result = os.execute(cmd .. user_name)
+    unlock_user(lock)
+    return result
 end
 
 function user.add_into_group(user, group)
-    local _lock
-    while _lock == nil do
-        _lock, _ = _lock_user()
-        _debug('Waiting for group add user lock...')
+    local lock
+    while lock == nil do
+        lock, _ = lock_user()
+        log_debug('Waiting for group add user lock...')
         os.sleep(1)
     end
 
-    local _result = os.execute('usermod -a -G ' .. group .. ' ' .. user)
-    _unlock_user(_lock)
-    return _result
+    local result = os.execute('usermod -a -G ' .. group .. ' ' .. user)
+    unlock_user(lock)
+    return result
 end
 
 function user.get_uid(user)
@@ -75,22 +75,22 @@ function user.get_uid(user)
 end
 
 function user.whoami()
-    local _whoami = io.popen('whoami')
-    local _user = _whoami:read('l')
-    local _res, _code = _whoami:close()
-    if _res then
-        return _user
+    local whoami = io.popen('whoami')
+    local user = whoami:read('l')
+    local res, code = whoami:close()
+    if res then
+        return user
     else
-        return _res, _code
+        return res, code
     end
 end
 
 function user.get_current_user() return user.whoami() end
 
 function user.is_root()
-    local _root = os.execute("sh -c '[ \"$(id -u)\" -eq \"0\" ] && exit 0 || exit 1'")
-    local _admin = os.execute('cmd.exe /C "NET SESSION >nul 2>&1 && EXIT /B 0 || EXIT /B 1"')
-    return _root or _admin
+    local root = os.execute("sh -c '[ \"$(id -u)\" -eq \"0\" ] && exit 0 || exit 1'")
+    local admin = os.execute('cmd.exe /C "NET SESSION >nul 2>&1 && EXIT /B 0 || EXIT /B 1"')
+    return root or admin
 end
 
 return user
