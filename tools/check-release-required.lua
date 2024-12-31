@@ -43,15 +43,14 @@ local sources = string.join(",", table.map(to_be_released, function(item)
 			plugin_name = item.plugin_name,
 			version = item.version
 		})
-	return msg 
+	return msg
 end))
 local versions = string.join(",", table.map(to_be_released, function(item) return item.version end))
 local hashes = string.join(",", table.map(to_be_released, function(item) return item.sha256 end))
 
 local REPOSITORY = os.getenv("GITHUB_REPOSITORY")
 
-io.write(
-	string.interpolate(
+local payload = string.interpolate(
 	'{ "id": "${ids}", "repository": "${repository}", "version": "${versions}", "package": "${packages}", "sha256": "${hashes}"}',
 		{
 			ids = ids,
@@ -60,4 +59,5 @@ io.write(
 			hashes = hashes,
 			repository = REPOSITORY
 		})
-)
+
+io.write(payload)
