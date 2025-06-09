@@ -19,7 +19,7 @@ local distro_setup_fns = {
         debug("Adding kubic sources...")
         local key_file = os.tmpname()
         local ok, err =
-            net.safe_download_file(
+            net.download_file(
             "https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_" .. version_id .. "/Release.key",
             key_file,
             {follow_redirects = true}

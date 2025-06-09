@@ -46,4 +46,4 @@ function sysctl.unset(variable)
 	assert(os.execute("sysctl -p"), err_msg)
 end
 
-return util.generate_safe_functions(sysctl)
+return sysctl

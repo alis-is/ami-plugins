@@ -1,5 +1,24 @@
 local log_trace, log_warn = util.global_log_factory("plugin/systemctl", "trace", "warn")
 
+-- shim
+local function getuid()
+    if type(fs.safe_getuid) == "function" then
+        local ok, uid = fs.safe_getuid()
+        ami_assert(ok, "failed to get current user uid - " .. (uid or ""))
+        return uid
+    end
+
+    local uid, err = fs.getuid()
+    ami_assert(uid, "failed to get current user uid - " .. (err or ""))
+    return uid
+end
+
+local mkdirp = type(fs.safe_mkdirp) == "function" and fs.safe_mkdirp or fs.mkdirp
+local copy_file = type(fs.safe_copy_file) == "function" and fs.safe_copy_file or fs.copy_file
+local chown = type(fs.chown) == "function" and fs.chown or fs.safe_chown
+local remove = type(fs.safe_remove) == "function" and fs.safe_remove or fs.remove
+-- end shim
+
 assert(os.execute('systemctl --version 2>&1 >/dev/null'), "systemctl not found")
 assert(proc.EPROC, "systemctl plugin requires posix proc extra api (eli.proc.extra)")
 
@@ -118,20 +137,19 @@ function systemctl.install_service(source_file, service_name, options)
     if type(container) == "string" and container ~= "root" then
         -- get home directory from passwd file
         local home = get_user_home(container)
-        local ok, uid = fs.safe_getuid(container)
-        ami_assert(ok, "Failed to get " .. container .. "uid - " .. (uid or ""))
+        local uid = getuid(container)
 
         local unit_store_path = home .. "/.config/systemd/user/"
-        local ok, err = fs.safe_mkdirp(unit_store_path .. "default.target.wants") -- create everything up to default.target.wants
+        local ok, err = mkdirp(unit_store_path .. "default.target.wants") -- create everything up to default.target.wants
         assert(ok, "failed to create user unit store directory - " .. (err or ""))
 
-        local ok, err = fs.safe_copy_file(source_file, unit_store_path .. service_name .. "." .. options.kind)
+        local ok, err = copy_file(source_file, unit_store_path .. service_name .. "." .. options.kind)
         assert(ok, "failed to install " .. service_name .. "." .. options.kind .. " - " .. (err or ""))
 
-        local ok, err = fs.chown(unit_store_path, uid, uid, { recurse = true })
+        local ok, err = chown(unit_store_path, uid, uid, { recurse = true })
         ami_assert(ok, "Failed to chown reports - " .. (err or ""))
     else
-        local ok, err = fs.safe_copy_file(source_file, "/etc/systemd/system/" .. service_name .. "." .. options.kind)
+        local ok, err = copy_file(source_file, "/etc/systemd/system/" .. service_name .. "." .. options.kind)
         assert(ok, "failed to install " .. service_name .. "." .. options.kind .. " - " .. (err or ""))
     end
 
@@ -216,7 +234,7 @@ function systemctl.remove_service(service_name, options)
     log_trace("Service disabled.")
 
     log_trace("Removing service...")
-    local ok, err = fs.safe_remove(service_unit_file)
+    local ok, err = remove(service_unit_file)
     if not ok then
         error("Failed to remove " .. service_name .. "." .. options.kind .. " - " .. (err or ""))
     end

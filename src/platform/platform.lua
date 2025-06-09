@@ -6,7 +6,7 @@ if ok then
 end
 
 local function execute(cmd)
-    local process_file = io.popen(cmd)
+    local process_file = io.popen(cmd .. " 2>&1", "r")
     if not process_file then
         return false, -1, "failed to start " .. cmd
     end
@@ -75,7 +75,7 @@ local function parse_release_file(firstline)
 end
 
 -- returns distro, version, { additional info }
-local function get_dist()
+local function get_linux_dist()
     local dist = ""
     local ver = ""
 
@@ -150,7 +150,7 @@ local function get_platform()
             return false
         else
             local details = {
-                OS = "win",
+                OS = "windows",
                 OS_NAME = output:match("OS Name:%s*([^\n]*)"),
                 OS_VERSION = output:match("OS Version::%s*([^\n]*)"),
                 SYSTEM_TYPE = output:match("System Type:%s*([^\n]*)")
@@ -171,8 +171,8 @@ local function get_platform()
         local DISTRO
         local DISTRO_VERSION = nil
         local ADDITIONALS = {}
-        if not KERNEL:match("[dD]arvin") then
-            DISTRO, DISTRO_VERSION, ADDITIONALS = get_dist()
+        if not KERNEL:match("[dD]arwin") then
+            DISTRO, DISTRO_VERSION, ADDITIONALS = get_linux_dist()
         else
             DISTRO = "MacOS"
         end

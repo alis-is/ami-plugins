@@ -1,6 +1,15 @@
-local log_debug, log_warn = require 'eli.util'.global_log_factory('plugin/platform', 'debug', 'warn')
+local log_debug, log_info, log_warn = require 'eli.util'.global_log_factory('plugin/user', 'debug', 'warn')
 
 local user = {}
+
+local platform_plugin = PLATFORM_PLUGIN or am.plugin.get('platform')
+local platform = platform_plugin.get_platform()
+
+assert(platform.OS == "unix", "user plugin is only supported on unix-like systems")
+
+local distro = type(platform.DISTRO) == "string" and platform.DISTRO:lower() or ""
+local isMacOs = distro == "macos" or distro == "darwin"
+local isWindows = platform.OS == "windows"
 
 function user.execute_cmd_as(cmd, user)
     return os.execute('su ' .. user .. ' -c ' .. cmd)
@@ -19,27 +28,35 @@ local function unlock_user(lock)
     if not ok then log_warn("Failed to unlock plugin.user.lockfile - " .. tostring(err) .. "!") end
 end
 
-function user.add(user_name, options)
-    local lock
-    while lock == nil do
-        lock, _ = lock_user()
-        log_debug('Waiting for add user lock...')
-        os.sleep(1)
-    end
-
-    local ok, uid = user.get_uid(user_name)
-    if ok and type(uid) == "number" then
-        unlock_user(lock)
-        return true, "exit", 0
-    end
-
+local function linux_user_add(user_name, options)
     if type(options) ~= 'table' then
         options = {
             disable_login = false,
             disable_password = false,
-            gecos = ''
+            gecos = '',
+            timeout = 60
         }
     end
+
+    local lock
+    local counter = 0
+    while lock == nil do
+        lock, _ = lock_user()
+        os.sleep(1)
+        counter = counter + 1
+        if counter > options.timeout and options.timeout > 0 then
+            log_warn('Timeout while waiting for user lock!')
+            return false, "timeout", 1
+        end
+        log_info('Waiting for user add lock...')
+    end
+
+    local uid, _ = user.get_uid(user_name)
+    if uid and type(uid) == "number" then
+        unlock_user(lock)
+        return true, "exit", 0
+    end
+
     local cmd = 'adduser '
     if options.disable_login then
         cmd = cmd .. '--disabled-login '
@@ -47,14 +64,85 @@ function user.add(user_name, options)
     if options.disable_password then
         cmd = cmd .. '--disabled-password '
     end
-    if options.gecos then
-        cmd = cmd .. '--gecos "' .. options.gecos .. '" '
+
+    local fullname = options.fullname or options.gecos
+    if fullname then
+        cmd = cmd .. '--gecos "' .. fullname .. '" '
     end
 
     log_debug('Creating user: ' .. tostring(user_name))
     local result = os.execute(cmd .. user_name)
     unlock_user(lock)
     return result
+end
+
+local function macos_user_add(user_name, options)
+    if type(options) ~= 'table' then
+        options = {
+            disable_login = false,
+            disable_password = false,
+            timeout = 60
+        }
+    end
+
+    local lock
+    local counter = 0
+    while lock == nil do
+        lock, _ = lock_user()
+        os.sleep(1)
+        counter = counter + 1
+        if counter > options.timeout and options.timeout > 0 then
+            log_warn('Timeout while waiting for user lock!')
+            return false, "timeout", 1
+        end
+        log_info('Waiting for user add lock...')
+    end
+
+    local uid, _ = user.get_uid(user_name)
+    if uid and type(uid) == "number" then
+        unlock_user(lock)
+        return true, "exit", 0
+    end
+
+    local cmd = 'sysadminctl -addUser ' .. user_name .. ' '
+    if options.disable_password then
+        cmd = cmd .. '-password - '
+    end
+    local fullname = options.fullname or options.gecos
+    if fullname then
+        cmd = cmd .. '-fullName "' .. options.fullname .. '" '
+    end
+
+    log_debug('Creating user: ' .. tostring(user_name))
+    local result = os.execute(cmd)
+    unlock_user(lock)
+    return result
+end
+
+local function windows_user_add(user_name, options)
+    return false, "not supported", 1
+end
+
+function user.add(user_name, options)
+    if isMacOs then
+        return macos_user_add(user_name, options)
+    end
+    if isWindows then
+        return windows_user_add(user_name, options)
+    end
+    return linux_user_add(user_name, options)
+end
+
+local function linux_add_into_group(user, group)
+    return os.execute('usermod -a -G ' .. group .. ' ' .. user)
+end
+
+local function macos_add_into_group(user, group)
+    return os.execute('dseditgroup -o edit -a ' .. user .. ' -t user ' .. group)
+end
+
+local function windows_add_into_group(user, group)
+    return false, "not supported", 1
 end
 
 function user.add_into_group(user, group)
@@ -65,13 +153,28 @@ function user.add_into_group(user, group)
         os.sleep(1)
     end
 
-    local result = os.execute('usermod -a -G ' .. group .. ' ' .. user)
+    local result = false
+    if isMacOs then
+        result = macos_add_into_group(user, group)
+    elseif isWindows then
+        result = windows_add_into_group(user, group)
+    else
+        result = linux_add_into_group(user, group)
+    end
     unlock_user(lock)
     return result
 end
 
 function user.get_uid(user)
-    return fs.safe_getuid(user)
+    if type(fs.safe_getuid) ~= "function" then --// TODO: remove shim
+        local ok, uid = fs.safe_getuid(user)
+        if ok then
+            return uid, nil
+        else
+            return nil, uid
+        end
+    end
+    return fs.getuid(user)
 end
 
 function user.whoami()
