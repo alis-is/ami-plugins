@@ -16,7 +16,8 @@ end
 -- shim end
 
 local platform_plugin = get_plugin("platform")
-local platform = platform_plugin.get_platform()
+local platform_identified, platform = platform_plugin.get_platform()
+assert(platform_identified, "failed to identify platform")
 assert(platform.OS == "unix", "user plugin is only supported on unix-like systems")
 
 local distro = type(platform.DISTRO) == "string" and platform.DISTRO:lower() or ""
