@@ -183,7 +183,7 @@ function user.add_into_group(user, group)
 end
 
 function user.get_uid(user)
-    if type(fs.safe_getuid) ~= "function" then --// TODO: remove shim
+    if type(fs.safe_getuid) == "function" then --// TODO: remove shim
         local ok, uid = fs.safe_getuid(user)
         if ok then
             return uid, nil
