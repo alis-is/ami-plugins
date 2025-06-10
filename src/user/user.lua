@@ -2,9 +2,21 @@ local log_debug, log_info, log_warn = require 'eli.util'.global_log_factory('plu
 
 local user = {}
 
-local platform_plugin = PLATFORM_PLUGIN or am.plugin.get('platform')
-local platform = platform_plugin.get_platform()
+-- shim
+local function get_plugin(name)
+    local success_or_plugin, plugin_or_error = am.plugin.get(name)
+    if type(success_or_plugin) == "boolean" then
+        if success_or_plugin then
+            return success_or_plugin
+        end
+        return nil, plugin_or_error or "failed to get plugin"
+    end
+    return success_or_plugin, plugin_or_error
+end
+-- shim end
 
+local platform_plugin = get_plugin("platform")
+local platform = platform_plugin.get_platform()
 assert(platform.OS == "unix", "user plugin is only supported on unix-like systems")
 
 local distro = type(platform.DISTRO) == "string" and platform.DISTRO:lower() or ""
