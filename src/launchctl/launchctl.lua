@@ -7,7 +7,7 @@ local copy_file = type(fs.safe_copy_file) == "function" and fs.safe_copy_file or
 local remove = type(fs.safe_remove) == "function" and fs.safe_remove or fs.remove
 -- end shim
 
-assert(os.execute('launchctl 2>&1 >/dev/null'), "launchctl not found")
+assert(os.execute('launchctl help 2>&1 >/dev/null'), "launchctl not found")
 assert(proc.EPROC, "launchctl plugin requires posix proc extra api (eli.proc.extra)")
 
 ---@class LaunchctlExecOptions
