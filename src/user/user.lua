@@ -100,13 +100,15 @@ local function macos_user_add(user_name, options)
         }
     end
 
+    local timeout = options.timeout or 60
+
     local lock
     local counter = 0
     while lock == nil do
         lock, _ = lock_user()
         os.sleep(1)
         counter = counter + 1
-        if counter > options.timeout and options.timeout > 0 then
+        if counter > timeout and timeout > 0 then
             log_warn('Timeout while waiting for user lock!')
             return false, "timeout", 1
         end
