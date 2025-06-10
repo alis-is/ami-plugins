@@ -1,4 +1,4 @@
-local log_debug, log_info, log_warn = require 'eli.util'.global_log_factory('plugin/user', 'debug', 'warn')
+local log_debug, log_info, log_warn = require 'eli.util'.global_log_factory('plugin/user', 'debug', "info", 'warn')
 
 local user = {}
 
