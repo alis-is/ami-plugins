@@ -88,7 +88,7 @@ end
 ---@param options LaunchctlExecOptions?
 function launchctl.stop_service(label, options)
     options = options or {}
-    local exit_code = launchctl.exec({ "bootout", "system/" .. label }, options)
+    local exit_code = launchctl.exec({ "stop", "system/" .. label }, options)
     assert(exit_code == 0, "Failed to stop service " .. label)
 end
 
