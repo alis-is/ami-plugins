@@ -14,8 +14,10 @@ assert(proc.EPROC, "launchctl plugin requires posix proc extra api (eli.proc.ext
 ---@class LaunchctlExecOptions
 
 ---@class LaunchctlInstallServiceOptions: LaunchctlExecOptions
+---@field setup_newsyslog boolean? If true, will set up a new syslog for the service
 
 ---@class LaunchctlRemoveServiceOptions: LaunchctlExecOptions
+---@field setup_newsyslog boolean? If true, will remove the syslog configuration for the service
 
 ---@class Launchctl
 ---@field exec fun(args: table, options: LaunchctlExecOptions?): number, string, string
@@ -59,9 +61,15 @@ function launchctl.install_service(source_file, label, options)
     options = options or {}
     local dest = DAEMON_DIR .. label .. SERVICE_FILE_EXT
     assert(copy_file(source_file, dest), "failed to install plist: " .. source_file)
-    -- set permissions for daemon
-    local exit_code = launchctl.exec({ "bootstrap", "system", dest }, options)
-    assert(exit_code == 0, "Failed to load launchd plist")
+
+    if options.setup_newsyslog then
+        -- Set up a new syslog for the service
+        local syslog_dest = "/var/log/" .. label .. ".log"
+        local content = syslog_dest .. "    640  7     *    @T00  Z"
+        local ok, err = fs.write_file("/etc/newsyslog.d/" .. label .. ".conf", content)
+        assert(ok, "failed to create newsyslog config: " .. tostring(err))
+        os.execute"newsyslog" -- Reload newsyslog configuration
+    end
 end
 
 ---Remove a launchd service (bootout and delete .plist)
@@ -73,6 +81,16 @@ function launchctl.remove_service(label, options)
     launchctl.exec({ "bootout", "system", dest }, options)
     if not fs.exists(dest) then return end
     remove(dest)
+
+    if options.setup_newsyslog then
+        -- Remove the syslog configuration if it exists
+        local syslog_conf = "/etc/newsyslog.d/" .. label .. ".conf"
+        if fs.exists(syslog_conf) then
+            local ok, err = fs.remove(syslog_conf)
+            assert(ok, "failed to remove newsyslog config: " .. tostring(err))
+            os.execute"newsyslog" -- Reload newsyslog configuration
+        end
+    end
 end
 
 local function is_already_bootstrapped_error(exit_code, stderr)
