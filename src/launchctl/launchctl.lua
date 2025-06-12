@@ -2,6 +2,7 @@ local log_trace, log_warn = util.global_log_factory("plugin/launchctl", "trace",
 
 local DAEMON_DIR = "/Library/LaunchDaemons/"
 local SERVICE_FILE_EXT = ".plist"
+local LOG_DIR = "/usr/local/var/log/"
 
 -- shim
 local copy_file = type(fs.safe_copy_file) == "function" and fs.safe_copy_file or fs.copy_file
@@ -53,6 +54,58 @@ function launchctl.exec(args, options)
     return process.exit_code, stdout, stderr
 end
 
+local function extract(content, key)
+    -- Pattern matches <key>KEY</key> <string>VALUE</string>
+    local val = content:match("<key>%s*" .. key .. "%s*</key>%s*<string>(.-)</string>")
+    return val
+end
+
+local function setup_output_file(path, uid, gid)
+    local ok, err = fs.mkdirp(path.dir(path))
+    assert(ok, "failed to create directory for '" .. path .. "': " .. tostring(err))
+
+    if not fs.exists(path) then
+        local ok, err = fs.write_file(path, "")
+        assert(ok, "failed to create '" .. path .. "': " .. tostring(err))
+    end
+    local ok, err = fs.chown(path, uid, gid)
+    assert(ok, "failed to change ownership of '" .. path .. "': " .. tostring(err))
+end
+
+local function setup_newsyslog_for_service(unit_file, label)
+    local plist_content, err = fs.read_file(unit_file)
+    assert(plist_content, "failed to read plist file: " .. tostring(err))
+
+    local user = extract(plist_content, "User")
+    local group = extract(plist_content, "Group") or user
+    local stdout_path = extract(plist_content, "StandardOutPath")
+    local stderr_path = extract(plist_content, "StandardErrorPath")
+
+    local uid, gid = fs.getuid(user), fs.getgid(group)
+    assert(uid and gid, "failed to get uid/gid for user/group: " .. tostring(user) .. "/" .. tostring(group))
+
+    local syslog_dests = {}
+
+    if stdout_path then
+        setup_output_file(stdout_path, uid, gid)
+        table.insert(syslog_dests, stdout_path)
+    end
+
+    if stderr_path and stdout_path ~= stderr_path then
+        setup_output_file(stderr_path, uid, gid)
+        table.insert(syslog_dests, stderr_path)
+    end
+
+    local content = ""
+    for _, syslog_dest in ipairs(syslog_dests) do
+        content = content .. syslog_dest "    640  7     *    @T00  Z\n"
+    end
+
+    local ok, err = fs.write_file("/etc/newsyslog.d/" .. label .. ".conf", content)
+    assert(ok, "failed to create newsyslog config: " .. tostring(err))
+    os.execute "newsyslog" -- Reload newsyslog configuration
+end
+
 ---Install a launchd service (copy .plist to correct place and bootstrap)
 ---@param source_file string
 ---@param label string
@@ -64,11 +117,12 @@ function launchctl.install_service(source_file, label, options)
 
     if options.setup_newsyslog then
         -- Set up a new syslog for the service
-        local syslog_dest = "/var/log/" .. label .. ".log"
-        local content = syslog_dest .. "    640  7     *    @T00  Z"
-        local ok, err = fs.write_file("/etc/newsyslog.d/" .. label .. ".conf", content)
-        assert(ok, "failed to create newsyslog config: " .. tostring(err))
-        os.execute"newsyslog" -- Reload newsyslog configuration
+        if fs.file_type(LOG_DIR) ~= "directory" then
+            local ok, err = fs.mkdirp(LOG_DIR)
+            assert(ok, "failed to create log directory: " .. tostring(err))
+        end
+
+        setup_newsyslog_for_service(source_file, label)
     end
 end
 
@@ -88,7 +142,7 @@ function launchctl.remove_service(label, options)
         if fs.exists(syslog_conf) then
             local ok, err = fs.remove(syslog_conf)
             assert(ok, "failed to remove newsyslog config: " .. tostring(err))
-            os.execute"newsyslog" -- Reload newsyslog configuration
+            os.execute "newsyslog" -- Reload newsyslog configuration
         end
     end
 end
@@ -97,9 +151,9 @@ local function is_already_bootstrapped_error(exit_code, stderr)
     -- Some macOS versions return 36, others 5 for "already loaded"
     if exit_code == 36 or exit_code == 5 then
         if stderr and (
-            stderr:match("already loaded") or
-            stderr:match("Input/output error")
-        ) then
+                stderr:match("already loaded") or
+                stderr:match("Input/output error")
+            ) then
             return true
         end
     end
@@ -115,7 +169,8 @@ end
 ---@param options LaunchctlExecOptions?
 function launchctl.start_service(label, options)
     options = options or {}
-    local exit_code, _, strerr = launchctl.exec({ "bootstrap", "system", DAEMON_DIR .. label .. SERVICE_FILE_EXT }, options)
+    local exit_code, _, strerr = launchctl.exec({ "bootstrap", "system", DAEMON_DIR .. label .. SERVICE_FILE_EXT },
+        options)
     -- exit code 36 means the service is already loaded, 5 means it was already started
     assert(exit_code == 0 or is_already_bootstrapped_error(exit_code, strerr), "Failed to start service " .. label)
     local exit_code = launchctl.exec({ "start", "system/" .. label }, options)
@@ -127,9 +182,9 @@ local function is_already_booted_out_error(exit_code, stderr)
     -- Some macOS versions return 36, others 5 for "already loaded"
     if exit_code == 5 then
         if stderr and (
-            stderr:match("Input/output error") or
-            stderr:match("No such process")
-        ) then
+                stderr:match("Input/output error") or
+                stderr:match("No such process")
+            ) then
             return true
         end
     end
@@ -153,7 +208,7 @@ function launchctl.get_service_status(label, options)
     options = options or {}
     local exit_code, stdout, _ = launchctl.exec({ "print", "system/" .. label }, options)
     if exit_code ~= 0 and launchctl.is_service_installed(label, options) then
-        return "not loaded", ""  -- service is installed but not loaded
+        return "not loaded", "" -- service is installed but not loaded
     end
     assert(exit_code == 0, "failed to get service status for " .. label)
 
@@ -164,7 +219,8 @@ function launchctl.get_service_status(label, options)
     local start_time = ""
     if state == "running" and pid then
         -- Try to get start time using ps
-        local process = proc.spawn("ps", { "-p", pid, "-o", "lstart"}, { stdio = { stdout = "pipe", stderr = "pipe" }, wait = true })
+        local process = proc.spawn("ps", { "-p", pid, "-o", "lstart" },
+            { stdio = { stdout = "pipe", stderr = "pipe" }, wait = true })
         if not process then
             error("Failed to execute ps command")
         end
@@ -175,7 +231,7 @@ function launchctl.get_service_status(label, options)
             local last_line = ps_out:match("([^\n]*)\n*$")
             start_time = last_line and last_line:match("^%s*(.-)%s*$") or ""
         else
-            start_time = ""                          -- Could not determine
+            start_time = "" -- Could not determine
         end
     end
 
