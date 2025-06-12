@@ -84,9 +84,10 @@ local function linux_user_add(user_name, options)
     if fullname then
         cmd = cmd .. '--gecos "' .. fullname .. '" '
     end
+    cmd = cmd .. user_name
 
-    log_debug('Creating user: ' .. tostring(user_name))
-    local result = os.execute(cmd .. user_name)
+    log_debug('Creating user: ' .. tostring(cmd))
+    local result = os.execute(cmd)
     unlock_user(lock)
     return result
 end
@@ -130,7 +131,7 @@ local function macos_user_add(user_name, options)
         cmd = cmd .. '-fullName "' .. options.fullname .. '" '
     end
 
-    log_debug('Creating user: ' .. tostring(user_name))
+    log_debug('Creating user: ' .. tostring(cmd))
     local result = os.execute(cmd)
     unlock_user(lock)
     return result
@@ -148,6 +149,97 @@ function user.add(user_name, options)
         return windows_user_add(user_name, options)
     end
     return linux_user_add(user_name, options)
+end
+
+
+local function linux_group_add(group_name, options)
+    if type(options) ~= 'table' then
+        options = {
+            disable_login = false,
+            disable_password = false,
+            gecos = '',
+            timeout = 60
+        }
+    end
+
+    local timeout = options.timeout or 60
+
+    local lock
+    local counter = 0
+    while lock == nil do
+        lock, _ = lock_user()
+        os.sleep(1)
+        counter = counter + 1
+        if counter > timeout and timeout > 0 then
+            log_warn('Timeout while waiting for user lock!')
+            return false, "timeout", 1
+        end
+        log_info('Waiting for user add lock...')
+    end
+
+    local uid, _ = user.get_gid(group_name)
+    if uid and type(uid) == "number" then
+        unlock_user(lock)
+        return true, "exit", 0
+    end
+
+    local cmd = 'addgroup ' .. group_name
+
+    log_debug('Creating group: ' .. tostring(cmd))
+    local result = os.execute(cmd)
+    unlock_user(lock)
+    return result
+end
+
+local function macos_group_add(group_name, options)
+    if type(options) ~= 'table' then
+        options = {
+            disable_login = false,
+            disable_password = false,
+            timeout = 60
+        }
+    end
+
+    local timeout = options.timeout or 60
+
+    local lock
+    local counter = 0
+    while lock == nil do
+        lock, _ = lock_user()
+        os.sleep(1)
+        counter = counter + 1
+        if counter > timeout and timeout > 0 then
+            log_warn('Timeout while waiting for user lock!')
+            return false, "timeout", 1
+        end
+        log_info('Waiting for user add lock...')
+    end
+
+    local uid, _ = user.get_gid(group_name)
+    if uid and type(uid) == "number" then
+        unlock_user(lock)
+        return true, "exit", 0
+    end
+
+    local cmd = 'dseditgroup -o create ' .. group_name
+    log_debug('Creating group: ' .. tostring(cmd))
+    local result = os.execute(cmd)
+    unlock_user(lock)
+    return result
+end
+
+local function windows_group_add(group_name, options)
+    return false, "not supported", 1
+end
+
+function user.group_add(group_name, options)
+    if isMacOs then
+        return macos_group_add(group_name, options)
+    end
+    if isWindows then
+        return windows_group_add(group_name, options)
+    end
+    return linux_group_add(group_name, options)
 end
 
 local function linux_add_into_group(user, group)
@@ -191,6 +283,10 @@ function user.get_uid(user)
             return nil, uid
         end
     end
+    return fs.getuid(user)
+end
+
+function user.get_gid(user)
     return fs.getuid(user)
 end
 
