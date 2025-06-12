@@ -60,16 +60,16 @@ local function extract(content, key)
     return val
 end
 
-local function setup_output_file(path, uid, gid)
-    local ok, err = fs.mkdirp(path.dir(path))
-    assert(ok, "failed to create directory for '" .. path .. "': " .. tostring(err))
+local function setup_output_file(file_path, uid, gid)
+    local ok, err = fs.mkdirp(path.dir(file_path))
+    assert(ok, "failed to create directory for '" .. file_path .. "': " .. tostring(err))
 
-    if not fs.exists(path) then
-        local ok, err = fs.write_file(path, "")
-        assert(ok, "failed to create '" .. path .. "': " .. tostring(err))
+    if not fs.exists(file_path) then
+        local ok, err = fs.write_file(file_path, "")
+        assert(ok, "failed to create '" .. file_path .. "': " .. tostring(err))
     end
-    local ok, err = fs.chown(path, uid, gid)
-    assert(ok, "failed to change ownership of '" .. path .. "': " .. tostring(err))
+    local ok, err = fs.chown(file_path, uid, gid)
+    assert(ok, "failed to change ownership of '" .. file_path .. "': " .. tostring(err))
 end
 
 local function setup_newsyslog_for_service(unit_file, label)
