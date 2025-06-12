@@ -134,6 +134,9 @@ end
 function launchctl.get_service_status(label, options)
     options = options or {}
     local exit_code, stdout, _ = launchctl.exec({ "print", "system/" .. label }, options)
+    if exit_code ~= 0 and launchctl.is_service_installed(label, options) then
+        return "not loaded", ""  -- service is installed but not loaded
+    end
     assert(exit_code == 0, "failed to get service status for " .. label)
 
     local state = stdout:match("state = ([^\n]+)")
