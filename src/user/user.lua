@@ -153,14 +153,7 @@ end
 
 
 local function linux_add_group(group_name, options)
-    if type(options) ~= 'table' then
-        options = {
-            disable_login = false,
-            disable_password = false,
-            gecos = '',
-            timeout = 60
-        }
-    end
+    if type(options) ~= 'table' then options = {} end
 
     local timeout = options.timeout or 60
 
@@ -192,13 +185,7 @@ local function linux_add_group(group_name, options)
 end
 
 local function macos_add_group(group_name, options)
-    if type(options) ~= 'table' then
-        options = {
-            disable_login = false,
-            disable_password = false,
-            timeout = 60
-        }
-    end
+    if type(options) ~= 'table' then options = {} end
 
     local timeout = options.timeout or 60
 
@@ -287,7 +274,7 @@ function user.get_uid(user)
 end
 
 function user.get_gid(user)
-    return fs.getuid(user)
+    return fs.getgid(user)
 end
 
 function user.whoami()
