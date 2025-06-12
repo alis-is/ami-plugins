@@ -76,8 +76,8 @@ local function setup_newsyslog_for_service(unit_file, label)
     local plist_content, err = fs.read_file(unit_file)
     assert(plist_content, "failed to read plist file: " .. tostring(err))
 
-    local user = extract(plist_content, "User")
-    local group = extract(plist_content, "Group") or user
+    local user = extract(plist_content, "UserName") or ""
+    local group = extract(plist_content, "GroupName") or user
     local stdout_path = extract(plist_content, "StandardOutPath")
     local stderr_path = extract(plist_content, "StandardErrorPath")
 
