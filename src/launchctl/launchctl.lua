@@ -101,7 +101,8 @@ function launchctl.get_service_status(label, options)
     local exit_code, stdout, _ = launchctl.exec({ "print", "system/" .. label }, options)
     assert(exit_code == 0, "failed to get service status for " .. label)
 
-    local state = stdout:match("state = ([%w_]+)")
+    local state = stdout:match("state = ([^\n]+)")
+    state = state and state:match("^%s*(.-)%s*$") or ""
     local pid = stdout:match("pid = (%d+)")
 
     local start_time = ""
