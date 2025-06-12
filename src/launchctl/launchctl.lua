@@ -100,7 +100,11 @@ function launchctl.start_service(label, options)
     local exit_code, _, strerr = launchctl.exec({ "bootstrap", "system", DAEMON_DIR .. label .. SERVICE_FILE_EXT }, options)
     -- exit code 36 means the service is already loaded, 5 means it was already started
     assert(exit_code == 0 or is_already_bootstrapped_error(exit_code, strerr), "Failed to start service " .. label)
-
+    local state = launchctl.get_service_status(label, options)
+    if state == "running" then
+        return
+    end
+    log_trace("service " .. label .. " is not running after bootstrap, trying to start it.")
     local exit_code = launchctl.exec({ "start", "system/" .. label }, options)
     assert(exit_code == 0, "Failed to start service " .. label)
 end
