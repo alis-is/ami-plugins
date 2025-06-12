@@ -98,7 +98,7 @@ local function setup_newsyslog_for_service(unit_file, label)
 
     local content = ""
     for _, syslog_dest in ipairs(syslog_dests) do
-        content = content .. syslog_dest "    640  7     *    @T00  Z\n"
+        content = content .. syslog_dest .. "    640  7     *    @T00  Z\n"
     end
 
     local ok, err = fs.write_file("/etc/newsyslog.d/" .. label .. ".conf", content)
