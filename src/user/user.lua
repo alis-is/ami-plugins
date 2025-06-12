@@ -152,7 +152,7 @@ function user.add(user_name, options)
 end
 
 
-local function linux_group_add(group_name, options)
+local function linux_add_group(group_name, options)
     if type(options) ~= 'table' then
         options = {
             disable_login = false,
@@ -191,7 +191,7 @@ local function linux_group_add(group_name, options)
     return result
 end
 
-local function macos_group_add(group_name, options)
+local function macos_add_group(group_name, options)
     if type(options) ~= 'table' then
         options = {
             disable_login = false,
@@ -228,18 +228,18 @@ local function macos_group_add(group_name, options)
     return result
 end
 
-local function windows_group_add(group_name, options)
+local function windows_add_group(group_name, options)
     return false, "not supported", 1
 end
 
-function user.group_add(group_name, options)
+function user.add_group(group_name, options)
     if isMacOs then
-        return macos_group_add(group_name, options)
+        return macos_add_group(group_name, options)
     end
     if isWindows then
-        return windows_group_add(group_name, options)
+        return windows_add_group(group_name, options)
     end
-    return linux_group_add(group_name, options)
+    return linux_add_group(group_name, options)
 end
 
 local function linux_add_into_group(user, group)
