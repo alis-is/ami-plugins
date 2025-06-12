@@ -1,6 +1,7 @@
 local log_trace, log_warn = util.global_log_factory("plugin/launchctl", "trace", "warn")
 
 local DAEMON_DIR = "/Library/LaunchDaemons/"
+local SERVICE_FILE_EXT = ".plist"
 
 -- shim
 local copy_file = type(fs.safe_copy_file) == "function" and fs.safe_copy_file or fs.copy_file
@@ -56,7 +57,7 @@ end
 ---@param options LaunchctlInstallServiceOptions?
 function launchctl.install_service(source_file, label, options)
     options = options or {}
-    local dest = DAEMON_DIR .. label .. ".plist"
+    local dest = DAEMON_DIR .. label .. SERVICE_FILE_EXT
     assert(copy_file(source_file, dest), "failed to install plist: " .. source_file)
     -- set permissions for daemon
     local exit_code = launchctl.exec({ "bootstrap", "system", dest }, options)
@@ -68,10 +69,27 @@ end
 ---@param options LaunchctlRemoveServiceOptions?
 function launchctl.remove_service(label, options)
     options = options or {}
-    local dest = DAEMON_DIR .. label .. ".plist"
+    local dest = DAEMON_DIR .. label .. SERVICE_FILE_EXT
     launchctl.exec({ "bootout", "system", dest }, options)
     if not fs.exists(dest) then return end
     remove(dest)
+end
+
+local function is_already_bootstrapped_error(exit_code, stderr)
+    -- Some macOS versions return 36, others 5 for "already loaded"
+    if exit_code == 36 or exit_code == 5 then
+        if stderr and (
+            stderr:match("already loaded") or
+            stderr:match("Input/output error")
+        ) then
+            return true
+        end
+    end
+    -- Extra fallback: message only
+    if stderr and stderr:match("already loaded") then
+        return true
+    end
+    return false
 end
 
 ---Start a service (kickstart in launchd, label must match plist Label)
@@ -79,8 +97,25 @@ end
 ---@param options LaunchctlExecOptions?
 function launchctl.start_service(label, options)
     options = options or {}
-    local exit_code = launchctl.exec({ "kickstart", "-k", "system/" .. label }, options)
+    local exit_code, _, strerr = launchctl.exec({ "bootstrap", "system", DAEMON_DIR .. label .. SERVICE_FILE_EXT }, options)
+    -- exit code 36 means the service is already loaded, 5 means it was already started
+    assert(exit_code == 0 or is_already_bootstrapped_error(exit_code, strerr), "Failed to start service " .. label)
+
+    local exit_code = launchctl.exec({ "start", "system/" .. label }, options)
     assert(exit_code == 0, "Failed to start service " .. label)
+end
+
+local function is_already_booted_out_error(exit_code, stderr)
+    -- Some macOS versions return 36, others 5 for "already loaded"
+    if exit_code == 5 then
+        if stderr and (
+            stderr:match("Input/output error") or
+            stderr:match("No such process")
+        ) then
+            return true
+        end
+    end
+    return false
 end
 
 ---Stop a service
@@ -88,8 +123,8 @@ end
 ---@param options LaunchctlExecOptions?
 function launchctl.stop_service(label, options)
     options = options or {}
-    local exit_code = launchctl.exec({ "stop", "system/" .. label }, options)
-    assert(exit_code == 0, "Failed to stop service " .. label)
+    local exit_code, _, strerr = launchctl.exec({ "bootout", "system", DAEMON_DIR .. label .. SERVICE_FILE_EXT }, options)
+    assert(exit_code == 0 or is_already_booted_out_error(exit_code, strerr), "Failed to stop service " .. label)
 end
 
 ---Get status (very limited: checks if loaded)
@@ -130,7 +165,7 @@ end
 ---@param label string
 ---@param options LaunchctlRemoveServiceOptions?
 function launchctl.is_service_installed(label, options)
-    return fs.exists(DAEMON_DIR .. label .. ".plist")
+    return fs.exists(DAEMON_DIR .. label .. SERVICE_FILE_EXT)
 end
 
 ---Creates a launchctl object with options preset
