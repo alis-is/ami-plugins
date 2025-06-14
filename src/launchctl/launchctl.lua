@@ -80,13 +80,13 @@ local function setup_newsyslog_for_service(unit_file, label)
     log_trace("Plist content: " .. plist_content)
 
     local user = extract(plist_content, "UserName") or ""
-    log_trace("UserName extracted: " .. user)
+    log_trace("UserName extracted: " .. tostring(user))
     local group = extract(plist_content, "GroupName") or user
-    log_trace("GroupName extracted: " .. group)
+    log_trace("GroupName extracted: " .. tostring(group))
     local stdout_path = extract(plist_content, "StandardOutPath")
-    log_trace("StandardOutPath extracted: " .. stdout_path)
+    log_trace("StandardOutPath extracted: " .. tostring(stdout_path))
     local stderr_path = extract(plist_content, "StandardErrorPath")
-    log_trace("StandardErrorPath extracted: " .. stderr_path)
+    log_trace("StandardErrorPath extracted: " .. tostring(stderr_path))
 
     local uid, gid = fs.getuid(user), fs.getgid(group)
     assert(uid and gid, "failed to get uid/gid for user/group: " .. tostring(user) .. "/" .. tostring(group))
