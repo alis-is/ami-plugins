@@ -1,4 +1,4 @@
-local log_trace, log_warn = util.global_log_factory("plugin/launchctl", "trace", "warn")
+local log_trace, log_debug, log_warn = util.global_log_factory("plugin/launchctl", "trace", "debug", "warn")
 
 local DAEMON_DIR = "/Library/LaunchDaemons/"
 local SERVICE_FILE_EXT = ".plist"
@@ -76,10 +76,17 @@ local function setup_newsyslog_for_service(unit_file, label)
     local plist_content, err = fs.read_file(unit_file)
     assert(plist_content, "failed to read plist file: " .. tostring(err))
 
+    log_debug("Setting up newsyslog for service " .. label)
+    log_trace("Plist content: " .. plist_content)
+
     local user = extract(plist_content, "UserName") or ""
+    log_trace("UserName extracted: " .. user)
     local group = extract(plist_content, "GroupName") or user
+    log_trace("GroupName extracted: " .. group)
     local stdout_path = extract(plist_content, "StandardOutPath")
+    log_trace("StandardOutPath extracted: " .. stdout_path)
     local stderr_path = extract(plist_content, "StandardErrorPath")
+    log_trace("StandardErrorPath extracted: " .. stderr_path)
 
     local uid, gid = fs.getuid(user), fs.getgid(group)
     assert(uid and gid, "failed to get uid/gid for user/group: " .. tostring(user) .. "/" .. tostring(group))
@@ -112,6 +119,7 @@ end
 ---@param options LaunchctlInstallServiceOptions?
 function launchctl.install_service(source_file, label, options)
     options = options or {}
+    log_debug("Setting up service " .. label .. " from " .. source_file)
     local dest = DAEMON_DIR .. label .. SERVICE_FILE_EXT
     assert(copy_file(source_file, dest), "failed to install plist: " .. source_file)
 
@@ -121,7 +129,6 @@ function launchctl.install_service(source_file, label, options)
             local ok, err = fs.mkdirp(LOG_DIR)
             assert(ok, "failed to create log directory: " .. tostring(err))
         end
-
         setup_newsyslog_for_service(source_file, label)
     end
 end
