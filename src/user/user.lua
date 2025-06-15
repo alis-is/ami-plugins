@@ -128,7 +128,7 @@ local function macos_user_add(user_name, options)
     end
     local fullname = options.fullname or options.gecos
     if fullname then
-        cmd = cmd .. '-fullName "' .. options.fullname .. '" '
+        cmd = cmd .. '-fullName "' .. fullname .. '" '
     end
 
     log_debug('Creating user: ' .. tostring(cmd))
