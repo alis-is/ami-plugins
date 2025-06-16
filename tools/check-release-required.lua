@@ -17,9 +17,8 @@ for _, plugin in ipairs(built_plugins) do
 	if not plugin_name or not version then
 		goto CONTINUE
 	end
-    local ok, response = client:safe_get(plugin_name .. "/v/" .. version .. ".json", { follow_redirects = true})
-	if ok and response.code == 200 then goto CONTINUE end
-
+    local response, err = client:get(plugin_name .. "/v/" .. version .. ".json", { follow_redirects = true})
+	if response and response.code == 200 then goto CONTINUE end
 	table.insert(to_be_released,
 		{ plugin_name = plugin_name, version = version, sha256 = fs.hash_file(path.combine("build", plugin),
 			{ hex = true, type = "sha256" }) })
@@ -27,6 +26,7 @@ for _, plugin in ipairs(built_plugins) do
 	::CONTINUE::
 end
 
+print("Plugins to be released: " .. #to_be_released)
 if #to_be_released == 0 then
 	io.write("")
 	return
