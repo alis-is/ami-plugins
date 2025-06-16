@@ -13,4 +13,3 @@ for _, plugin in ipairs(plugins) do
 	zip.compress(plugin .. "/", path.combine(OUTPUT_DIRECTORY, file_name), { recurse = true, content_only = true, overwrite = true })
 	::CONTINUE::
 end
-

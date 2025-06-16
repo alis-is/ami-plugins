@@ -26,7 +26,6 @@ for _, plugin in ipairs(built_plugins) do
 	::CONTINUE::
 end
 
-print("Plugins to be released: " .. #to_be_released)
 if #to_be_released == 0 then
 	io.write("")
 	return
