@@ -79,9 +79,9 @@ local function setup_newsyslog_for_service(unit_file, label)
     log_debug("Setting up newsyslog for service " .. label)
     log_trace("Plist content: " .. plist_content)
 
-    local user = extract(plist_content, "UserName") or ""
+    local user = extract(plist_content, "UserName") or "root"
     log_trace("UserName extracted: " .. tostring(user))
-    local group = extract(plist_content, "GroupName") or user
+    local group = extract(plist_content, "GroupName") or user or "wheel"
     log_trace("GroupName extracted: " .. tostring(group))
     local stdout_path = extract(plist_content, "StandardOutPath")
     log_trace("StandardOutPath extracted: " .. tostring(stdout_path))
@@ -104,8 +104,9 @@ local function setup_newsyslog_for_service(unit_file, label)
     end
 
     local content = ""
+    local ownership = string.join(":", user, group)
     for _, syslog_dest in ipairs(syslog_dests) do
-        content = content .. syslog_dest .. "    640  7     *    @T00  Z\n"
+        content = content .. syslog_dest .. "  " .. ownership .. "  640  7     *    @T00  Z\n"
     end
 
     local ok, err = fs.write_file("/etc/newsyslog.d/" .. label .. ".conf", content)
