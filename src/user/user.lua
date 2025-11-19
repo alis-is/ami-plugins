@@ -105,18 +105,10 @@ local function linux_user_add(user_name, options)
     else
         -- RHEL/CENTOS/GENERIC LINUX STYLE (Fallback)
         cmd = 'useradd '
-
-        -- 'adduser' creates home by default, 'useradd' needs -m
-        cmd = cmd .. '-m '
+        cmd = cmd .. '-M ' -- Do not create home directory
 
         if fullname and fullname ~= "" then
             cmd = cmd .. '-c "' .. fullname .. '" '
-        end
-
-        -- useradd accounts are locked by default if no password is set,
-        -- but we can use -L to explicitly lock if requested.
-        if options.disable_login then
-            cmd = cmd .. '-L '
         end
 
         cmd = cmd .. user_name
@@ -188,7 +180,6 @@ function user.add(user_name, options)
     return linux_user_add(user_name, options)
 end
 
-
 local function linux_add_group(group_name, options)
     if type(options) ~= 'table' then options = {} end
 
@@ -207,13 +198,32 @@ local function linux_add_group(group_name, options)
         log_info('Waiting for user add lock...')
     end
 
-    local uid, _ = user.get_gid(group_name)
-    if uid and type(uid) == "number" then
+    local gid, _ = user.get_gid(group_name)
+    if gid and type(gid) == "number" then
         unlock_user(lock)
         return true, "exit", 0
     end
 
-    local cmd = 'addgroup ' .. group_name
+    local cmd = ""
+    if command_exists('addgroup') then
+        -- Debian/Ubuntu style
+        cmd = 'addgroup '
+
+        if options.system then
+            cmd = cmd .. '--system '
+        end
+
+        cmd = cmd .. group_name
+    else
+        -- RHEL/CentOS/Generic Linux style
+        cmd = 'groupadd '
+        
+        if options.system then
+            cmd = cmd .. '--system '
+        end
+        
+        cmd = cmd .. group_name
+    end
 
     log_debug('Creating group: ' .. tostring(cmd))
     local result = os.execute(cmd)
