@@ -41,6 +41,18 @@ local function unlock_user(lock)
     if not ok then log_warn("Failed to unlock plugin.user.lockfile - " .. tostring(err) .. "!") end
 end
 
+local function command_exists(cmd)
+    -- Redirect output to /dev/null so it doesn't clutter logs
+    local status = os.execute('command -v ' .. cmd .. ' >/dev/null 2>&1')
+
+    -- Handle differences between Lua 5.1 and 5.2+ return values for os.execute
+    if type(status) == "boolean" then
+        return status -- Lua 5.2+
+    else
+        return status == 0 -- Lua 5.1 (returns exit code directly)
+    end
+end
+
 local function linux_user_add(user_name, options)
     if type(options) ~= 'table' then
         options = {
@@ -66,28 +78,53 @@ local function linux_user_add(user_name, options)
         log_info('Waiting for user add lock...')
     end
 
-    local uid, _ = user.get_uid(user_name)
+    local uid, _ = user.get_uid(user_name) -- Assuming user.get_uid is defined
     if uid and type(uid) == "number" then
         unlock_user(lock)
         return true, "exit", 0
     end
 
-    local cmd = 'adduser '
-    if options.disable_login then
-        cmd = cmd .. '--disabled-login '
-    end
-    if options.disable_password then
-        cmd = cmd .. '--disabled-password '
-    end
-
+    local cmd = ""
     local fullname = options.fullname or options.gecos
-    if fullname then
-        cmd = cmd .. '--gecos "' .. fullname .. '" '
-    end
-    cmd = cmd .. user_name
 
-    log_debug('Creating user: ' .. tostring(cmd))
+    if command_exists("adduser") then
+        -- DEBIAN/UBUNTU STYLE
+        cmd = 'adduser '
+        if options.disable_login then
+            cmd = cmd .. '--disabled-login '
+        end
+        if options.disable_password then
+            cmd = cmd .. '--disabled-password '
+        end
+        if fullname and fullname ~= "" then
+            cmd = cmd .. '--gecos "' .. fullname .. '" '
+        end
+        -- Suppress interactive output/prompts where possible
+        cmd = cmd .. '--quiet '
+        cmd = cmd .. user_name
+    else
+        -- RHEL/CENTOS/GENERIC LINUX STYLE (Fallback)
+        cmd = 'useradd '
+
+        -- 'adduser' creates home by default, 'useradd' needs -m
+        cmd = cmd .. '-m '
+
+        if fullname and fullname ~= "" then
+            cmd = cmd .. '-c "' .. fullname .. '" '
+        end
+
+        -- useradd accounts are locked by default if no password is set,
+        -- but we can use -L to explicitly lock if requested.
+        if options.disable_login then
+            cmd = cmd .. '-L '
+        end
+
+        cmd = cmd .. user_name
+    end
+
+    log_debug('Creating user with command: ' .. tostring(cmd))
     local result = os.execute(cmd)
+
     unlock_user(lock)
     return result
 end
