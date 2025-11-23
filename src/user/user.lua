@@ -125,7 +125,7 @@ local function macos_user_add(user_name, options)
     if type(options) ~= 'table' then
         options = {
             disable_login = false,
-            disable_password = false,
+            disable_password = false, -- If true, creates a "System User" via dscl
             timeout = 60
         }
     end
@@ -151,17 +151,55 @@ local function macos_user_add(user_name, options)
         return true, "exit", 0
     end
 
-    local cmd = 'sysadminctl -addUser ' .. user_name .. ' '
+    local result = true
+
     if options.disable_password then
-        cmd = cmd .. '-password - '
-    end
-    local fullname = options.fullname or options.gecos
-    if fullname then
-        cmd = cmd .. '-fullName "' .. fullname .. '" '
+        log_debug('Creating passwordless system user via DSCL: ' .. user_name)
+
+        local handle = io.popen("dscl . -list /Users UniqueID | awk '$2 > 400 && $2 < 500 { print $2 }' | sort -n | tail -1")
+        local max_uid = handle:read("*a")
+        handle:close()
+
+        local new_uid = 401
+        if max_uid and tonumber(max_uid) then
+            new_uid = tonumber(max_uid) + 1
+        end
+
+        local home_dir = "/var/" .. user_name
+        local fullname = options.fullname or options.gecos or user_name
+
+        local cmds = {
+            'dscl . -create /Users/' .. user_name,
+            'dscl . -create /Users/' .. user_name .. ' UserShell /usr/bin/false',
+            'dscl . -create /Users/' .. user_name .. ' RealName "' .. fullname .. '"',
+            'dscl . -create /Users/' .. user_name .. ' UniqueID ' .. new_uid,
+            'dscl . -create /Users/' .. user_name .. ' PrimaryGroupID 20', -- Group 20 is 'staff'
+            'dscl . -create /Users/' .. user_name .. ' NFSHomeDirectory ' .. home_dir,
+            'dscl . -create /Users/' .. user_name .. ' IsHidden 1', -- Hide from login screen
+            -- Manually create home dir because dscl won't do it
+            'mkdir -p ' .. home_dir,
+            'chown ' .. new_uid .. ':20 ' .. home_dir
+        }
+
+        for _, cmd in ipairs(cmds) do
+            log_debug("Exec: " .. cmd)
+            local status = os.execute(cmd)
+            if not status then 
+                log_warn("Failed to execute: " .. cmd)
+                result = false 
+            end
+        end
+    else
+        local cmd = 'sysadminctl -addUser ' .. user_name .. ' '
+        local fullname = options.fullname or options.gecos
+        if fullname then
+            cmd = cmd .. '-fullName "' .. fullname .. '" '
+        end
+
+        log_debug('Creating standard user: ' .. tostring(cmd))
+        result = os.execute(cmd)
     end
 
-    log_debug('Creating user: ' .. tostring(cmd))
-    local result = os.execute(cmd)
     unlock_user(lock)
     return result
 end
